@@ -32,7 +32,8 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: npx tsx watch src/index.ts
+    command: sh -c "npm ci --workspace=@notifyengine/api --workspace=@notifyengine/shared --include-workspace-root && npx tsx watch src/index.ts"
+    user: "node"
     working_dir: /workspace/apps/api
     ports:
       - "3000:3000"
@@ -52,7 +53,8 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
-    command: npx tsx watch src/index.ts
+    command: sh -c "npm ci --workspace=@notifyengine/worker --workspace=@notifyengine/shared --include-workspace-root && npx tsx watch src/index.ts"
+    user: "node"
     working_dir: /workspace/apps/worker
     env_file: .env
     volumes:
@@ -87,7 +89,8 @@ services:
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
-    command: npx vite --host 0.0.0.0
+    command: sh -c "npm ci --workspace=@notifyengine/dashboard --workspace=@notifyengine/shared --include-workspace-root && npx vite --host 0.0.0.0"
+    user: "node"
     working_dir: /workspace/apps/dashboard
     ports:
       - "5173:5173"
