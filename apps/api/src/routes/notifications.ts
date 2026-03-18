@@ -7,6 +7,8 @@ import { SendNotificationSchema } from '../schemas/notification.js';
 import { getNotificationQueue } from '../queue.js';
 import { logger } from '../logger.js';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const notificationRouter = Router();
 
 notificationRouter.post('/', async (req: Request, res: Response): Promise<void> => {
@@ -148,4 +150,59 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     status_url: `/v1/notifications/${notificationId}`,
     request_id: requestId,
   });
+});
+
+// ── GET /v1/notifications/:id ──
+notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
+  const { requestId, dbClient } = req;
+  const { id } = req.params;
+
+  if (!UUID_REGEX.test(id)) {
+    res.status(400).json({
+      error: { code: 'INVALID_ID', message: 'Invalid notification ID format.' },
+      request_id: requestId,
+    });
+    return;
+  }
+
+  try {
+    const notifResult = await dbClient.query(
+      `SELECT id, status, recipient, subject, priority, routing_mode,
+              delivered_via, delivered_at, failed_at, routing_decision,
+              metadata, created_at, updated_at
+       FROM notifications WHERE id = $1`,
+      [id],
+    );
+
+    if (notifResult.rows.length === 0) {
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Notification not found.' },
+        request_id: requestId,
+      });
+      return;
+    }
+
+    const notification = notifResult.rows[0];
+
+    const attemptsResult = await dbClient.query(
+      `SELECT channel_type, attempt_number, status, status_code,
+              error_message, engaged, engagement_type, engaged_at,
+              started_at, completed_at, duration_ms
+       FROM delivery_attempts WHERE notification_id = $1
+       ORDER BY attempt_number ASC`,
+      [id],
+    );
+
+    res.status(200).json({
+      ...notification,
+      delivery_attempts: attemptsResult.rows,
+      request_id: requestId,
+    });
+  } catch (err) {
+    logger.error({ err, requestId, notificationId: id }, 'Failed to fetch notification');
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
+      request_id: requestId,
+    });
+  }
 });
