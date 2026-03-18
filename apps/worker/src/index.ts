@@ -50,13 +50,13 @@ const workers = queueConfigs.map(({ name, concurrency }) => {
 
         const client = await pool.connect();
         try {
-          await client.query('SET app.current_tenant_id = $1', [job.data.tenantId]);
+          await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [job.data.tenantId]);
           await client.query(
             `UPDATE notifications SET status = 'dlq', updated_at = NOW() WHERE id = $1`,
             [job.data.notificationId],
           );
         } finally {
-          await client.query('RESET app.current_tenant_id').catch(() => {});
+          await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
           client.release();
         }
       } catch (dlqErr) {
