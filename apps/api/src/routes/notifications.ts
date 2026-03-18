@@ -121,7 +121,7 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
       backoff: retryConfig.backoff,
     });
   } catch (err) {
-    logger.error({ err, requestId, tenantId, notificationId }, 'Failed to enqueue notification — Redis may be down');
+    logger.error({ err, requestId, tenantId, notificationId }, 'Failed to enqueue notification - Redis may be down');
     res.status(503).json({
       error: { code: 'SERVICE_UNAVAILABLE', message: 'Queue service is temporarily unavailable. Retry later.' },
       request_id: requestId,

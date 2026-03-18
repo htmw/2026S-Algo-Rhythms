@@ -115,7 +115,7 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
         errorMessage = result.error ?? null;
       } else {
         // Sprint 1: only email is implemented
-        log.info({ channelType: channel.type, channelId: channel.id }, 'Channel type not yet implemented — skipping');
+        log.info({ channelType: channel.type, channelId: channel.id }, 'Channel type not yet implemented - skipping');
         continue;
       }
 
@@ -156,7 +156,7 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
         return;
       }
 
-      log.warn({ channelType: channel.type, error: errorMessage, durationMs }, 'Channel delivery failed — trying next');
+      log.warn({ channelType: channel.type, error: errorMessage, durationMs }, 'Channel delivery failed - trying next');
     }
 
     // All channels exhausted
