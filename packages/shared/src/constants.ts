@@ -1,11 +1,11 @@
 export const QUEUE_NAMES = {
-  CRITICAL: 'notifications:critical',
-  HIGH: 'notifications:high',
-  STANDARD: 'notifications:standard',
-  BULK: 'notifications:bulk',
-  DLQ: 'notifications:dlq',
-  ML_RETRAIN: 'ml:retrain',
-  STATS_ROLLUP: 'stats:rollup',
+  CRITICAL: 'notifications-critical',
+  HIGH: 'notifications-high',
+  STANDARD: 'notifications-standard',
+  BULK: 'notifications-bulk',
+  DLQ: 'notifications-dlq',
+  ML_RETRAIN: 'ml-retrain',
+  STATS_ROLLUP: 'stats-rollup',
 } as const;
 
 export const QUEUE_CONCURRENCY = {
