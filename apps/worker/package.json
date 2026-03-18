@@ -1,0 +1,24 @@
+{
+  "name": "@notifyengine/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "lint": "eslint src/",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@notifyengine/shared": "*",
+    "bullmq": "^5.0.0",
+    "pg": "^8.13.0",
+    "pino": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
