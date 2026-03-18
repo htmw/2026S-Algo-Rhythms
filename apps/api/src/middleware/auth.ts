@@ -73,7 +73,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   let client;
   try {
     client = await pool.connect();
-    await client.query('SET app.current_tenant_id = $1', [row.tenant_id]);
+    await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [row.tenant_id]);
   } catch (err) {
     client?.release();
     logger.error({ err, requestId, tenantId: row.tenant_id }, 'Failed to set tenant context');
@@ -91,7 +91,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   const releaseClient = (): void => {
     if (released) return;
     released = true;
-    client.query('RESET app.current_tenant_id')
+    client.query("SELECT set_config('app.current_tenant_id', '', false)")
       .catch((err: unknown) => {
         logger.error({ err, requestId }, 'Failed to reset tenant context');
       })

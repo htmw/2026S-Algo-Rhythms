@@ -25,7 +25,7 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
   const client = await pool.connect();
 
   try {
-    await client.query('SET app.current_tenant_id = $1', [tenantId]);
+    await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
 
     // Mark as processing
     await client.query(
@@ -167,7 +167,7 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
     log.error('All channels exhausted');
     throw new Error('All channels exhausted');
   } finally {
-    await client.query('RESET app.current_tenant_id').catch(() => {});
+    await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
     client.release();
   }
 }

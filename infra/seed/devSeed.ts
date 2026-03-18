@@ -65,7 +65,7 @@ async function seed(): Promise<void> {
     );
 
     // ── Channels + usage for Acme (RLS-protected tables) ──
-    await client.query('SET app.current_tenant_id = $1', [acmeId]);
+    await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [acmeId]);
 
     await client.query(
       `INSERT INTO channels (tenant_id, type, label, config, priority, is_enabled, circuit_state)
@@ -90,7 +90,7 @@ async function seed(): Promise<void> {
     );
 
     // ── Channels + usage for Globex (RLS-protected tables) ──
-    await client.query('SET app.current_tenant_id = $1', [globexId]);
+    await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [globexId]);
 
     await client.query(
       `INSERT INTO channels (tenant_id, type, label, config, priority, is_enabled, circuit_state)
@@ -108,7 +108,7 @@ async function seed(): Promise<void> {
     );
 
     // ── Reset tenant context ──
-    await client.query('RESET app.current_tenant_id');
+    await client.query("SELECT set_config('app.current_tenant_id', '', false)");
 
     await client.query('COMMIT');
 
