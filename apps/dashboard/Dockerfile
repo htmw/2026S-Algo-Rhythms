@@ -6,6 +6,7 @@ COPY apps/dashboard/package.json apps/dashboard/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci --workspace=@notifyengine/dashboard --workspace=@notifyengine/shared --include-workspace-root
 
+COPY tsconfig.base.json ./
 COPY packages/shared/ packages/shared/
 RUN npm run build --workspace=@notifyengine/shared
 
