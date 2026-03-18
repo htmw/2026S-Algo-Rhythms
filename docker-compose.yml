@@ -28,46 +28,6 @@ services:
     networks:
       - notifyengine
 
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    command: sh -c "npm ci --workspace=@notifyengine/api --workspace=@notifyengine/shared --include-workspace-root && npx tsx watch src/index.ts"
-    user: "node"
-    working_dir: /workspace/apps/api
-    ports:
-      - "3000:3000"
-    env_file: .env
-    volumes:
-      - .:/workspace
-      - /workspace/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - notifyengine
-
-  worker:
-    build:
-      context: .
-      dockerfile: apps/worker/Dockerfile
-    command: sh -c "npm ci --workspace=@notifyengine/worker --workspace=@notifyengine/shared --include-workspace-root && npx tsx watch src/index.ts"
-    user: "node"
-    working_dir: /workspace/apps/worker
-    env_file: .env
-    volumes:
-      - .:/workspace
-      - /workspace/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - notifyengine
-
   ml-service:
     build:
       context: ./apps/ml-service
@@ -82,22 +42,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - notifyengine
-
-  dashboard:
-    build:
-      context: .
-      dockerfile: apps/dashboard/Dockerfile
-    command: sh -c "npm ci --workspace=@notifyengine/dashboard --workspace=@notifyengine/shared --include-workspace-root && npx vite --host 0.0.0.0"
-    user: "node"
-    working_dir: /workspace/apps/dashboard
-    ports:
-      - "5173:5173"
-    env_file: .env
-    volumes:
-      - .:/workspace
-      - /workspace/node_modules
     networks:
       - notifyengine
 
