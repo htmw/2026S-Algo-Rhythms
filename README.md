@@ -12,7 +12,7 @@ Multi-tenant notification delivery service with ML-powered adaptive channel rout
 ### 1. Clone the repo
 
 ```bash
-git clone git@github.com:SalvatorePace/2026S-Algo-Rhythms.git
+git clone git@github.com:htmw/2026S-Algo-Rhythms.git
 cd 2026S-Algo-Rhythms
 ```
 
