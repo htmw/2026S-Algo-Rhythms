@@ -19,7 +19,7 @@ CREATE POLICY tenant_isolation_notifications ON notifications
     USING (tenant_id = current_setting('app.current_tenant_id')::uuid)
     WITH CHECK (tenant_id = current_setting('app.current_tenant_id')::uuid);
 
--- delivery_attempts (denormalized tenant_id — direct check, no joins)
+-- delivery_attempts (denormalized tenant_id - direct check, no joins)
 ALTER TABLE delivery_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE delivery_attempts FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_delivery_attempts ON delivery_attempts

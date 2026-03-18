@@ -63,7 +63,7 @@ async function migrate(): Promise<void> {
       console.log(`  ✓ ${filename}`);
     } catch (err) {
       await client.query('ROLLBACK');
-      console.error(`  ✗ ${filename} — rolled back`);
+      console.error(`  ✗ ${filename} - rolled back`);
       throw err;
     } finally {
       client.release();

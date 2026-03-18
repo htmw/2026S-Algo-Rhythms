@@ -43,7 +43,7 @@ const workers = queueConfigs.map(({ name, concurrency }) => {
     // Move to DLQ after all retries exhausted
     const maxAttempts = job.opts.attempts ?? 1;
     if (job.attemptsMade >= maxAttempts) {
-      logger.warn({ jobId: job.id, notificationId: job.data.notificationId }, 'All retries exhausted — moving to DLQ');
+      logger.warn({ jobId: job.id, notificationId: job.data.notificationId }, 'All retries exhausted - moving to DLQ');
 
       try {
         await dlqQueue.add('dlq', job.data);
