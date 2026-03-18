@@ -11,8 +11,8 @@ interface GeneratedKey {
   prefix: string;
 }
 
-function generateApiKey(environment: 'live' | 'test'): GeneratedKey {
-  const raw = `ne_${environment}_${crypto.randomBytes(32).toString('hex')}`;
+function generateApiKey(): GeneratedKey {
+  const raw = `ne_test_${crypto.randomBytes(32).toString('hex')}`;
   const hash = crypto.createHash('sha256').update(raw).digest('hex');
   const prefix = raw.substring(0, 8);
   return { raw, hash, prefix };
@@ -48,9 +48,9 @@ async function seed(): Promise<void> {
       return;
     }
 
-    // ── API keys ──
-    const acmeKey = generateApiKey('test');
-    const globexKey = generateApiKey('test');
+    // ── API keys (no RLS on api_keys table) ──
+    const acmeKey = generateApiKey();
+    const globexKey = generateApiKey();
 
     await client.query(
       `INSERT INTO api_keys (tenant_id, key_hash, key_prefix, label, scopes)
@@ -64,45 +64,69 @@ async function seed(): Promise<void> {
       [globexId, globexKey.hash, globexKey.prefix, 'Dev key', '{notifications:write,notifications:read}'],
     );
 
-    // ── Channels for Acme ──
+    // ── Channels + usage for Acme (RLS-protected tables) ──
+    await client.query('SET app.current_tenant_id = $1', [acmeId]);
+
     await client.query(
-      `INSERT INTO channels (tenant_id, type, label, config, priority)
+      `INSERT INTO channels (tenant_id, type, label, config, priority, is_enabled, circuit_state)
        VALUES
-         ($1, 'email', 'Email (Mailpit)', '{"smtp_host": "mailpit", "smtp_port": 1025}', 10),
-         ($1, 'websocket', 'In-App WebSocket', '{}', 5),
-         ($1, 'webhook', 'Generic Webhook', '{"url": "https://httpbin.org/post"}', 1)`,
+         ($1, 'email', 'Email (Mailpit)', '{"smtp_host": "mailpit", "smtp_port": 1025}', 10, true, 'closed'),
+         ($1, 'websocket', 'In-App WebSocket', '{}', 5, true, 'closed'),
+         ($1, 'webhook', 'Generic Webhook', '{"url": "https://httpbin.org/post"}', 1, true, 'closed')`,
       [acmeId],
     );
 
-    // ── Channels for Globex ──
-    await client.query(
-      `INSERT INTO channels (tenant_id, type, label, config, priority)
-       VALUES
-         ($1, 'email', 'Email (Mailpit)', '{"smtp_host": "mailpit", "smtp_port": 1025}', 10),
-         ($1, 'sms_webhook', 'SMS Webhook', '{"url": "https://httpbin.org/post"}', 8),
-         ($1, 'websocket', 'In-App WebSocket', '{}', 5)`,
-      [globexId],
-    );
-
-    // ── Usage records (current period) ──
     const periodStart = new Date();
     periodStart.setDate(1);
     const periodEnd = new Date(periodStart);
     periodEnd.setMonth(periodEnd.getMonth() + 1);
+    const periodStartStr = periodStart.toISOString().split('T')[0];
+    const periodEndStr = periodEnd.toISOString().split('T')[0];
 
     await client.query(
       `INSERT INTO usage_records (tenant_id, period_start, period_end)
-       VALUES ($1, $2, $3), ($4, $2, $3)`,
-      [acmeId, periodStart.toISOString().split('T')[0], periodEnd.toISOString().split('T')[0], globexId],
+       VALUES ($1, $2, $3)`,
+      [acmeId, periodStartStr, periodEndStr],
     );
+
+    // ── Channels + usage for Globex (RLS-protected tables) ──
+    await client.query('SET app.current_tenant_id = $1', [globexId]);
+
+    await client.query(
+      `INSERT INTO channels (tenant_id, type, label, config, priority, is_enabled, circuit_state)
+       VALUES
+         ($1, 'email', 'Email (Mailpit)', '{"smtp_host": "mailpit", "smtp_port": 1025}', 10, true, 'closed'),
+         ($1, 'sms_webhook', 'SMS Webhook', '{"url": "https://httpbin.org/post"}', 8, true, 'closed'),
+         ($1, 'websocket', 'In-App WebSocket', '{}', 5, true, 'closed')`,
+      [globexId],
+    );
+
+    await client.query(
+      `INSERT INTO usage_records (tenant_id, period_start, period_end)
+       VALUES ($1, $2, $3)`,
+      [globexId, periodStartStr, periodEndStr],
+    );
+
+    // ── Reset tenant context ──
+    await client.query('RESET app.current_tenant_id');
 
     await client.query('COMMIT');
 
+    console.log('');
     console.log('Seed complete.');
     console.log('');
-    console.log('=== DEV API KEYS (save these — they cannot be retrieved later) ===');
-    console.log(`Acme Corp:         ${acmeKey.raw}`);
-    console.log(`Globex Industries: ${globexKey.raw}`);
+    console.log('════════════════════════════════════════════════');
+    console.log('  DEV API KEYS');
+    console.log('════════════════════════════════════════════════');
+    console.log('');
+    console.log(`  Tenant: Acme Corp`);
+    console.log(`  API Key: ${acmeKey.raw}`);
+    console.log('');
+    console.log(`  Tenant: Globex Industries`);
+    console.log(`  API Key: ${globexKey.raw}`);
+    console.log('');
+    console.log('  Save these - they are shown once and never stored.');
+    console.log('════════════════════════════════════════════════');
     console.log('');
   } catch (err) {
     await client.query('ROLLBACK');
