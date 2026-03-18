@@ -39,6 +39,7 @@ services:
     env_file: .env
     volumes:
       - .:/workspace
+      - /workspace/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,6 +57,7 @@ services:
     env_file: .env
     volumes:
       - .:/workspace
+      - /workspace/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +94,7 @@ services:
     env_file: .env
     volumes:
       - .:/workspace
+      - /workspace/node_modules
     networks:
       - notifyengine
 
