@@ -1,0 +1,112 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - notifyengine
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - notifyengine
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: npx tsx watch src/index.ts
+    working_dir: /workspace/apps/api
+    ports:
+      - "3000:3000"
+    env_file: .env
+    volumes:
+      - .:/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - notifyengine
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    command: npx tsx watch src/index.ts
+    working_dir: /workspace/apps/worker
+    env_file: .env
+    volumes:
+      - .:/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - notifyengine
+
+  ml-service:
+    build:
+      context: ./apps/ml-service
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - ./apps/ml-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - notifyengine
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    command: npx vite --host 0.0.0.0
+    working_dir: /workspace/apps/dashboard
+    ports:
+      - "5173:5173"
+    env_file: .env
+    volumes:
+      - .:/workspace
+    networks:
+      - notifyengine
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - notifyengine
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  notifyengine:
+    driver: bridge
