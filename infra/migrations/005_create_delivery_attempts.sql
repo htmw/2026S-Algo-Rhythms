@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS delivery_attempts (
 CREATE INDEX IF NOT EXISTS idx_delivery_attempts_notification
     ON delivery_attempts(notification_id);
 
+CREATE INDEX IF NOT EXISTS idx_delivery_attempts_tenant
+    ON delivery_attempts(tenant_id);
+
 CREATE INDEX IF NOT EXISTS idx_delivery_attempts_training
     ON delivery_attempts(channel_type, status, engaged, started_at)
     WHERE status = 'success';
