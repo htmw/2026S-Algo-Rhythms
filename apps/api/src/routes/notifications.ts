@@ -11,10 +11,12 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export const notificationRouter = Router();
 
+// ─────────────────────────────────────────────────────────────
+// POST /v1/notifications
+// ─────────────────────────────────────────────────────────────
 notificationRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   const { requestId, tenantId, dbClient } = req;
 
-  // ── Validate request body ──
   let parsed;
   try {
     parsed = SendNotificationSchema.parse(req.body);
@@ -30,7 +32,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     throw err;
   }
 
-  // ── Idempotency check ──
   const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
 
   if (idempotencyKey) {
@@ -65,9 +66,9 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     }
   }
 
-  // ── Insert notification ──
   let notificationId: string;
   let createdAt: string;
+
   try {
     const result = await dbClient.query(
       `INSERT INTO notifications (
@@ -89,6 +90,7 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
         parsed.metadata ? JSON.stringify(parsed.metadata) : '{}',
       ],
     );
+
     notificationId = result.rows[0].id;
     createdAt = result.rows[0].created_at;
   } catch (err) {
@@ -100,8 +102,8 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // ── Enqueue to BullMQ ──
   const priority = parsed.priority as NotificationPriority;
+
   const jobData: NotificationJob = {
     notificationId,
     tenantId,
@@ -121,26 +123,21 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
       backoff: retryConfig.backoff,
     });
   } catch (err) {
-    logger.error({ err, requestId, tenantId, notificationId }, 'Failed to enqueue notification - Redis may be down');
+    logger.error({ err, requestId, tenantId, notificationId }, 'Queue failed');
     res.status(503).json({
-      error: { code: 'SERVICE_UNAVAILABLE', message: 'Queue service is temporarily unavailable. Retry later.' },
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Queue unavailable. Retry later.' },
       request_id: requestId,
     });
     return;
   }
-
-  // ── Update status to queued ──
   try {
     await dbClient.query(
       `UPDATE notifications SET status = 'queued', updated_at = NOW() WHERE id = $1`,
       [notificationId],
     );
   } catch (err) {
-    logger.error({ err, requestId, notificationId }, 'Failed to update notification status to queued');
+    logger.error({ err, requestId, notificationId }, 'Status update failed');
   }
-
-  logger.info({ requestId, tenantId, notificationId, priority: parsed.priority }, 'Notification queued');
-
   res.status(202).json({
     id: notificationId,
     status: 'queued',
@@ -152,9 +149,11 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
   });
 });
 
-// ── GET /v1/notifications/:id ──
+// ─────────────────────────────────────────────────────────────
+// GET /v1/notifications/:id  (SCRUM-123 ✅)
+// ─────────────────────────────────────────────────────────────
 notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
-  const { requestId, dbClient } = req;
+  const { requestId, tenantId, dbClient } = req;
   const { id } = req.params;
 
   if (!UUID_REGEX.test(id)) {
@@ -167,10 +166,11 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
 
   try {
     const notifResult = await dbClient.query(
-      `SELECT id, status, recipient, subject, priority, routing_mode,
+      `SELECT id, tenant_id, status, recipient, subject, priority, routing_mode,
               delivered_via, delivered_at, failed_at, routing_decision,
               metadata, created_at, updated_at
-       FROM notifications WHERE id = $1`,
+       FROM notifications
+       WHERE id = $1`,
       [id],
     );
 
@@ -184,22 +184,33 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
 
     const notification = notifResult.rows[0];
 
+    if (notification.tenant_id !== tenantId) {
+      res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Access denied for this notification.' },
+        request_id: requestId,
+      });
+      return;
+    }
+
     const attemptsResult = await dbClient.query(
       `SELECT channel_type, attempt_number, status, status_code,
               error_message, engaged, engagement_type, engaged_at,
               started_at, completed_at, duration_ms
-       FROM delivery_attempts WHERE notification_id = $1
+       FROM delivery_attempts
+       WHERE notification_id = $1
        ORDER BY attempt_number ASC`,
       [id],
     );
 
+    const { tenant_id, ...notificationData } = notification;
+
     res.status(200).json({
-      ...notification,
+      ...notificationData,
       delivery_attempts: attemptsResult.rows,
       request_id: requestId,
     });
   } catch (err) {
-    logger.error({ err, requestId, notificationId: id }, 'Failed to fetch notification');
+    logger.error({ err, requestId, notificationId: id }, 'Fetch failed');
     res.status(500).json({
       error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
       request_id: requestId,
