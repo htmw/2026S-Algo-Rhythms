@@ -14,7 +14,6 @@ export const notificationRouter = Router();
 notificationRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   const { requestId, tenantId, dbClient } = req;
 
-  // ── Validate request body ──
   let parsed;
   try {
     parsed = SendNotificationSchema.parse(req.body);
@@ -30,7 +29,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     throw err;
   }
 
-  // ── Idempotency check ──
   const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
 
   if (idempotencyKey) {
@@ -65,7 +63,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     }
   }
 
-  // ── Insert notification ──
   let notificationId: string;
   let createdAt: string;
   try {
@@ -100,7 +97,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // ── Enqueue to BullMQ ──
   const priority = parsed.priority as NotificationPriority;
   const jobData: NotificationJob = {
     notificationId,
@@ -129,7 +125,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // ── Update status to queued ──
   try {
     await dbClient.query(
       `UPDATE notifications SET status = 'queued', updated_at = NOW() WHERE id = $1`,
@@ -152,9 +147,71 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
   });
 });
 
+// ── GET /v1/notifications/summary ──
+notificationRouter.get('/summary', async (req: Request, res: Response): Promise<void> => {
+  const { requestId, tenantId, dbClient } = req;
+
+  try {
+    const result = await dbClient.query(
+      `SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status = 'delivered')::int AS delivered,
+          COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+          COUNT(*) FILTER (WHERE status = 'queued')::int AS queued,
+          COUNT(*) FILTER (WHERE status = 'processing')::int AS processing
+       FROM notifications
+       WHERE tenant_id = $1`,
+      [tenantId],
+    );
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err, requestId, tenantId }, 'Failed to fetch notification summary');
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
+      request_id: requestId,
+    });
+  }
+});
+
+// ── GET /v1/notifications?limit=20 ──
+notificationRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+  const { requestId, tenantId, dbClient } = req;
+  const limit = Math.min(Number(req.query.limit ?? 20), 100);
+
+  try {
+    const result = await dbClient.query(
+      `SELECT id, recipient, body, delivered_via, status, created_at, delivered_at
+       FROM notifications
+       WHERE tenant_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [tenantId, limit],
+    );
+
+    const records = result.rows.map((row) => ({
+      id: row.id,
+      recipient: row.recipient,
+      message: row.body,
+      channel: row.delivered_via ?? 'email',
+      status: row.status,
+      createdAt: row.created_at,
+      deliveredAt: row.delivered_at,
+    }));
+
+    res.status(200).json(records);
+  } catch (err) {
+    logger.error({ err, requestId, tenantId }, 'Failed to fetch notifications list');
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
+      request_id: requestId,
+    });
+  }
+});
+
 // ── GET /v1/notifications/:id ──
 notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
-  const { requestId, dbClient } = req;
+  const { requestId, tenantId, dbClient } = req;
   const { id } = req.params;
 
   if (!UUID_REGEX.test(id)) {
@@ -167,10 +224,11 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
 
   try {
     const notifResult = await dbClient.query(
-      `SELECT id, status, recipient, subject, priority, routing_mode,
+      `SELECT id, tenant_id, status, recipient, subject, priority, routing_mode,
               delivered_via, delivered_at, failed_at, routing_decision,
               metadata, created_at, updated_at
-       FROM notifications WHERE id = $1`,
+       FROM notifications
+       WHERE id = $1`,
       [id],
     );
 
@@ -184,17 +242,28 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
 
     const notification = notifResult.rows[0];
 
+    if (notification.tenant_id !== tenantId) {
+      res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'You do not have access to this notification.' },
+        request_id: requestId,
+      });
+      return;
+    }
+
     const attemptsResult = await dbClient.query(
       `SELECT channel_type, attempt_number, status, status_code,
               error_message, engaged, engagement_type, engaged_at,
               started_at, completed_at, duration_ms
-       FROM delivery_attempts WHERE notification_id = $1
+       FROM delivery_attempts
+       WHERE notification_id = $1
        ORDER BY attempt_number ASC`,
       [id],
     );
 
+    const { tenant_id, ...notificationData } = notification;
+
     res.status(200).json({
-      ...notification,
+      ...notificationData,
       delivery_attempts: attemptsResult.rows,
       request_id: requestId,
     });

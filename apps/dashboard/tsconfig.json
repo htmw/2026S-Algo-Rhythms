@@ -1,14 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "outDir": "dist",
-    "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "noEmit": true
-  },
-  "include": ["src"],
+  "files": [],
   "references": [
-    { "path": "./tsconfig.node.json" },
-    { "path": "../../packages/shared" }
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
   ]
 }

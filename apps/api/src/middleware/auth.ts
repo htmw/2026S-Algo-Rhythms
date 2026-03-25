@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { pool } from '../db.js';
