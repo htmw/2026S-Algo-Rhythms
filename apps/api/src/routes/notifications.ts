@@ -4,8 +4,10 @@ import { ZodError } from 'zod';
 import { RETRY_CONFIG } from '@notifyengine/shared';
 import type { NotificationJob, NotificationPriority } from '@notifyengine/shared';
 import { SendNotificationSchema } from '../schemas/notification.js';
+import { ListNotificationsQuerySchema } from '../schemas/notification.js';
 import { getNotificationQueue } from '../queue.js';
 import { logger } from '../logger.js';
+
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -150,6 +152,101 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     status_url: `/v1/notifications/${notificationId}`,
     request_id: requestId,
   });
+});
+
+// ── GET /v1/notifications ──
+notificationRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+  const { requestId, tenantId, dbClient } = req;
+
+  // ── Validate query params ──
+  let parsed: ListNotificationsQuery;
+  try {
+    parsed = ListNotificationsQuerySchema.parse(req.query);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const message = err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message },
+        request_id: requestId,
+      });
+      return;
+    }
+    throw err;
+  }
+
+  const { status, cursor, limit } = parsed;
+
+  // ── Build query dynamically ──
+  const conditions: string[] = ['tenant_id = $1'];
+  const params: unknown[] = [tenantId];
+  let paramIndex = 2;
+
+  if (status) {
+    conditions.push(`status = $${paramIndex++}`);
+    params.push(status);
+  }
+
+  if (cursor) {
+    conditions.push(`created_at < $${paramIndex++}`);
+    params.push(cursor);
+  }
+
+  // fetch limit+1 to detect if next page exists
+  params.push(limit + 1);
+  const limitParam = `$${paramIndex}`;
+
+  try {
+    const result = await dbClient.query<{
+      id: string;
+      recipient: string;
+      channel_preference: string[] | null;
+      force_channel: string | null;
+      routing_mode: string;
+      subject: string | null;
+      priority: string;
+      status: string;
+      delivered_via: string | null;
+      delivered_at: string | null;
+      failed_at: string | null;
+      metadata: Record<string, unknown>;
+      routing_decision: Record<string, unknown> | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `SELECT
+         id, recipient, channel_preference, force_channel,
+         routing_mode, subject, priority, status,
+         delivered_via, delivered_at, failed_at,
+         metadata, routing_decision, created_at, updated_at
+       FROM notifications
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT ${limitParam}`,
+      params,
+    );
+
+    const hasNextPage = result.rows.length > limit;
+    const items = hasNextPage ? result.rows.slice(0, limit) : result.rows;
+    const nextCursor = hasNextPage ? items[items.length - 1].created_at : null;
+
+    logger.info({ requestId, tenantId, count: items.length }, 'Notifications listed');
+
+    res.status(200).json({
+      data: items,
+      pagination: {
+        nextCursor,
+        hasNextPage,
+        limit,
+      },
+      request_id: requestId,
+    });
+  } catch (err) {
+    logger.error({ err, requestId, tenantId }, 'Failed to list notifications');
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
+      request_id: requestId,
+    });
+  }
 });
 
 // ── GET /v1/notifications/:id ──

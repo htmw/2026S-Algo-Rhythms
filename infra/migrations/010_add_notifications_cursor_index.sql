@@ -1,0 +1,3 @@
+-- Covers tenant_id + status filter + created_at cursor in a single index scan
+-- Used by GET /v1/notifications?status=...&cursor=...
+CREATE INDEX IF NOT EXISTS idx_notifications_tenant_status_created ON notifications(tenant_id, status, created_at DESC);
