@@ -4,6 +4,7 @@ import cors from 'cors';
 import { logger } from './logger.js';
 import { authMiddleware } from './middleware/auth.js';
 import { notificationRouter } from './routes/notifications.js';
+import { engagementRouter } from './routes/engagement.js';
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -20,6 +21,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/v1/notifications', authMiddleware, notificationRouter);
+app.use('/v1/engagement', engagementRouter);
 
 app.listen(port, () => {
   logger.info({ port }, 'API server started');
