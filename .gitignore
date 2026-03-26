@@ -8,6 +8,11 @@
 .env
 .env.*
 !.env.example
+
+# =====================
+# CLAUDE PROJECT DOCS
+# =====================
+.claude-docs/
 *.pem
 *.key
 *.cert
