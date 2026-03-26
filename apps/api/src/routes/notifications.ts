@@ -138,6 +138,9 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
   } catch (err) {
     logger.error({ err, requestId, notificationId }, 'Status update failed');
   }
+
+  logger.info({ requestId, tenantId, notificationId, priority: parsed.priority }, 'Notification queued');
+
   res.status(202).json({
     id: notificationId,
     status: 'queued',

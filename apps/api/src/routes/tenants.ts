@@ -17,8 +17,12 @@ function slugifyCompanyName(name: string): string {
     .slice(0, 100);
 }
 
-function generateApiKey(): string {
-  return `ne_live_${crypto.randomBytes(32).toString('hex')}`;
+function generateApiKey(): { raw: string; hash: string; prefix: string } {
+  const env = process.env.NODE_ENV === 'production' ? 'live' : 'test';
+  const raw = `ne_${env}_${crypto.randomBytes(32).toString('hex')}`;
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  const prefix = raw.substring(0, 8);
+  return { raw, hash, prefix };
 }
 
 tenantRouter.post('/register', async (req: Request, res: Response): Promise<void> => {
@@ -36,15 +40,12 @@ tenantRouter.post('/register', async (req: Request, res: Response): Promise<void
       });
       return;
     }
-
     throw err;
   }
 
-  const { company_name, email } = parsed;
+  const { company_name } = parsed;
   const slug = slugifyCompanyName(company_name);
-  const rawApiKey = generateApiKey();
-  const keyHash = crypto.createHash('sha256').update(rawApiKey).digest('hex');
-  const keyPrefix = rawApiKey.substring(0, 8);
+  const apiKey = generateApiKey();
 
   const client = await pool.connect();
 
@@ -52,9 +53,7 @@ tenantRouter.post('/register', async (req: Request, res: Response): Promise<void
     await client.query('BEGIN');
 
     const duplicateCheck = await client.query(
-      `SELECT id
-       FROM tenants
-       WHERE slug = $1`,
+      'SELECT id FROM tenants WHERE slug = $1',
       [slug],
     );
 
@@ -68,9 +67,8 @@ tenantRouter.post('/register', async (req: Request, res: Response): Promise<void
     }
 
     const tenantResult = await client.query(
-      `INSERT INTO tenants (
-         name, slug, plan, rate_limit_per_sec, monthly_quota, max_channels
-       ) VALUES ($1, $2, 'free', 10, 10000, 3)
+      `INSERT INTO tenants (name, slug, plan, rate_limit_per_sec, monthly_quota, max_channels)
+       VALUES ($1, $2, 'free', 10, 10000, 3)
        RETURNING id, name, slug, created_at`,
       [company_name, slug],
     );
@@ -78,29 +76,29 @@ tenantRouter.post('/register', async (req: Request, res: Response): Promise<void
     const tenant = tenantResult.rows[0];
 
     await client.query(
-      `INSERT INTO api_keys (
-         tenant_id, key_hash, key_prefix, label, scopes
-       ) VALUES ($1, $2, $3, $4, $5)`,
-      [tenant.id, keyHash, keyPrefix, `${company_name} primary key`, '{notifications:write,notifications:read}'],
+      `INSERT INTO api_keys (tenant_id, key_hash, key_prefix, label, scopes)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [tenant.id, apiKey.hash, apiKey.prefix, `${company_name} primary key`, '{notifications:write,notifications:read}'],
     );
 
     await client.query('COMMIT');
 
-    logger.info({ requestId, tenantId: tenant.id, companyName: company_name, email }, 'Tenant registered');
+    logger.info({ requestId, tenantId: tenant.id, companyName: company_name }, 'Tenant registered');
 
     res.status(201).json({
       tenant_id: tenant.id,
       company_name: tenant.name,
-      email,
-      api_key: rawApiKey,
+      slug: tenant.slug,
+      api_key: apiKey.raw,
       message: 'Tenant registered successfully. Save this API key now - it will not be shown again.',
       created_at: tenant.created_at,
       request_id: requestId,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     await client.query('ROLLBACK');
 
-    if (err?.code === '23505') {
+    const pgError = err as { code?: string };
+    if (pgError.code === '23505') {
       res.status(409).json({
         error: { code: 'DUPLICATE_TENANT', message: 'A tenant with this company name already exists.' },
         request_id: requestId,
@@ -108,7 +106,7 @@ tenantRouter.post('/register', async (req: Request, res: Response): Promise<void
       return;
     }
 
-    logger.error({ err, requestId, companyName: company_name, email }, 'Tenant registration failed');
+    logger.error({ err, requestId, companyName: company_name }, 'Tenant registration failed');
     res.status(500).json({
       error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
       request_id: requestId,
