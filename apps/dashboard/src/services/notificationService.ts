@@ -47,16 +47,18 @@ export async function fetchRecentNotifications(): Promise<NotificationRecord[]> 
     throw new Error("Failed to fetch notifications");
   }
 
-  const data = await res.json();
+  const json = await res.json();
 
-  // 🔥 FIX: map backend → frontend format
-  return data.map((item: Record<string, unknown>) => ({
-    id: item.id,
-    recipient: item.recipient,
-    message: item.message || item.body,   // fallback fix
-    channel: item.channel || item.delivered_via || "email",
-    status: item.status,
-    createdAt: item.createdAt || item.created_at,
-    deliveredAt: item.deliveredAt || item.delivered_at,
+  // API returns { data: [...], pagination: {...} } from cursor pagination endpoint
+  const items = Array.isArray(json) ? json : json.data ?? [];
+
+  return items.map((item: Record<string, unknown>) => ({
+    id: item.id as string,
+    recipient: item.recipient as string,
+    message: (item.body ?? item.subject ?? "") as string,
+    channel: (item.delivered_via ?? "email") as NotificationRecord["channel"],
+    status: item.status as NotificationRecord["status"],
+    createdAt: item.created_at as string,
+    deliveredAt: (item.delivered_at ?? null) as string | null,
   }));
 }
