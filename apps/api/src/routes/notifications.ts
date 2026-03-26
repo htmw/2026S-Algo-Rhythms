@@ -154,11 +154,40 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
   });
 });
 
+// ── GET /v1/notifications/summary ──
+notificationRouter.get('/summary', async (req: Request, res: Response): Promise<void> => {
+  const { requestId, tenantId, dbClient } = req;
+
+  try {
+    const result = await dbClient.query(
+      `SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status = 'delivered')::int AS delivered,
+          COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+          COUNT(*) FILTER (WHERE status = 'queued')::int AS queued,
+          COUNT(*) FILTER (WHERE status = 'processing')::int AS processing
+       FROM notifications
+       WHERE tenant_id = $1`,
+      [tenantId],
+    );
+
+    res.status(200).json({
+      ...result.rows[0],
+      request_id: requestId,
+    });
+  } catch (err) {
+    logger.error({ err, requestId, tenantId }, 'Failed to fetch notification summary');
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
+      request_id: requestId,
+    });
+  }
+});
+
 // ── GET /v1/notifications ──
 notificationRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   const { requestId, tenantId, dbClient } = req;
 
-  // ── Validate query params ──
   let parsed: ListNotificationsQuery;
   try {
     parsed = ListNotificationsQuerySchema.parse(req.query);
@@ -176,7 +205,6 @@ notificationRouter.get('/', async (req: Request, res: Response): Promise<void> =
 
   const { status, cursor, limit } = parsed;
 
-  // ── Build query dynamically ──
   const conditions: string[] = ['tenant_id = $1'];
   const params: unknown[] = [tenantId];
   let paramIndex = 2;
@@ -191,28 +219,11 @@ notificationRouter.get('/', async (req: Request, res: Response): Promise<void> =
     params.push(cursor);
   }
 
-  // fetch limit+1 to detect if next page exists
   params.push(limit + 1);
   const limitParam = `$${paramIndex}`;
 
   try {
-    const result = await dbClient.query<{
-      id: string;
-      recipient: string;
-      channel_preference: string[] | null;
-      force_channel: string | null;
-      routing_mode: string;
-      subject: string | null;
-      priority: string;
-      status: string;
-      delivered_via: string | null;
-      delivered_at: string | null;
-      failed_at: string | null;
-      metadata: Record<string, unknown>;
-      routing_decision: Record<string, unknown> | null;
-      created_at: string;
-      updated_at: string;
-    }>(
+    const result = await dbClient.query(
       `SELECT
          id, recipient, channel_preference, force_channel,
          routing_mode, subject, priority, status,
