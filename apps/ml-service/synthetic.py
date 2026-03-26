@@ -9,10 +9,9 @@ from faker import Faker
 
 fake = Faker()
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://notify:notify@localhost:5432/notifyengine",
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required")
 
 TOTAL_EXAMPLES = 10000
 PROFILES = ["email_fan", "push_fan", "mixed"]
