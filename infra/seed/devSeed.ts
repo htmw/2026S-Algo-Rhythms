@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import pg from 'pg';
 import crypto from 'node:crypto';
 

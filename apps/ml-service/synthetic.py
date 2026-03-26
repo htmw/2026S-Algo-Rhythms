@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import uuid
 from datetime import datetime, timedelta
@@ -8,13 +9,10 @@ from faker import Faker
 
 fake = Faker()
 
-DB_CONFIG = {
-    "dbname": "notifyengine",
-    "user": "notify",
-    "password": "notify",
-    "host": "localhost",
-    "port": 5432,
-}
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://notify:notify@localhost:5432/notifyengine",
+)
 
 TOTAL_EXAMPLES = 10000
 PROFILES = ["email_fan", "push_fan", "mixed"]
@@ -211,11 +209,14 @@ def upsert_recipient_stats(cur, tenant_id: str, recipient: str, channel: str, en
 
 
 def main():
-    conn = psycopg2.connect(**DB_CONFIG)
+    conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
 
     try:
         tenant_id, channel_map = fetch_reference_ids(cur)
+
+        # Set tenant context for RLS
+        cur.execute("SELECT set_config('app.current_tenant_id', %s, false)", (str(tenant_id),))
 
         inserted = 0
         for _ in range(TOTAL_EXAMPLES):
