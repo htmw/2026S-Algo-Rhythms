@@ -5,6 +5,7 @@ import { logger } from './logger.js';
 import { authMiddleware } from './middleware/auth.js';
 import { notificationRouter } from './routes/notifications.js';
 import { tenantRouter } from './routes/tenants.js';
+import { engagementRouter } from './routes/engagement.js';
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -20,8 +21,9 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Public route (no API key required)
+// Public routes (no API key required)
 app.use('/v1/tenants', tenantRouter);
+app.use('/v1/engagement', engagementRouter);
 
 // Protected routes
 app.use('/v1/notifications', authMiddleware, notificationRouter);
