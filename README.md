@@ -122,29 +122,6 @@ Expected response: `200 OK` with notification details, routing decision, and del
 | `DASHBOARD_URL` | Dashboard URL (used for CORS) | `http://localhost:5173` |
 | `LOG_LEVEL` | Pino log level | `debug` |
 
-## Git Workflow
-
-**Branch naming:**
-```
-feature/SCRUM-{id}-{description}
-bugfix/SCRUM-{id}-{description}
-```
-
-**Commit messages** use conventional prefixes:
-```
-feat: Add notification delivery worker
-fix: Handle expired API keys in auth middleware
-test: Add integration tests for POST /v1/notifications
-docs: Update README with setup instructions
-refactor: Extract channel routing into separate module
-chore: Update dependencies
-```
-
-**Pull requests:**
-- PRs go into `develop` (never directly to `main`)
-- `develop` merges to `main` at sprint milestones
-- Every PR must pass lint + tests in CI
-
 ## Project Structure
 
 ```
