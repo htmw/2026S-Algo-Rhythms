@@ -39,13 +39,13 @@ This starts PostgreSQL (5432), Redis (6379), Mailpit (SMTP 1025, UI 8025), and t
 ### 5. Run database migrations
 
 ```bash
-export $(grep -v '^#' .env | xargs) && npx tsx infra/migrate.ts
+export $(grep -v '^#' .env | grep -v '^$' | xargs) && npx tsx infra/migrate.ts
 ```
 
 ### 6. Seed test data
 
 ```bash
-export $(grep -v '^#' .env | xargs) && npx tsx infra/seed/devSeed.ts
+export $(grep -v '^#' .env | grep -v '^$' | xargs) && npx tsx infra/seed/devSeed.ts
 ```
 
 Save the API keys printed to the console. They are shown once and never stored.
@@ -56,12 +56,12 @@ Open a separate terminal for each:
 
 **API server** (port 3000):
 ```bash
-export $(grep -v '^#' .env | xargs) && npm run dev --workspace=@notifyengine/api
+export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run dev --workspace=@notifyengine/api
 ```
 
 **Worker** (processes notification queue):
 ```bash
-export $(grep -v '^#' .env | xargs) && npm run dev --workspace=@notifyengine/worker
+export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run dev --workspace=@notifyengine/worker
 ```
 
 **Dashboard** (port 5173):
@@ -164,5 +164,7 @@ notifyengine/
 ├── turbo.json            # Turborepo pipeline config
 ├── tsconfig.base.json    # Shared TypeScript config
 ├── eslint.config.js      # ESLint flat config
-└── package.json          # Root workspace config
+├── .env.example          # Environment variable template
+├── package.json          # Root workspace config
+└── README.md
 ```
