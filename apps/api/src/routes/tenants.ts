@@ -81,6 +81,20 @@ tenantRouter.post('/register', async (req: Request, res: Response): Promise<void
       [tenant.id, apiKey.hash, apiKey.prefix, `${company_name} primary key`, '{notifications:write,notifications:read}'],
     );
 
+    // Create default channels for the new tenant
+    await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenant.id]);
+
+    await client.query(
+      `INSERT INTO channels (tenant_id, type, label, config, priority, is_enabled, circuit_state)
+       VALUES
+         ($1, 'email', 'Email', '{"smtp_host": "localhost", "smtp_port": 1025}', 10, true, 'closed'),
+         ($1, 'websocket', 'In-App WebSocket', '{}', 5, true, 'closed'),
+         ($1, 'webhook', 'Generic Webhook', '{}', 1, true, 'closed')`,
+      [tenant.id],
+    );
+
+    await client.query("SELECT set_config('app.current_tenant_id', '', false)");
+
     await client.query('COMMIT');
 
     logger.info({ requestId, tenantId: tenant.id, companyName: company_name }, 'Tenant registered');
