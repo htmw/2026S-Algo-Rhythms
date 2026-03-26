@@ -65,6 +65,13 @@ export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run dev --workspace=@n
 ```
 
 **Dashboard** (port 5173):
+
+Create `apps/dashboard/.env` with an API key from tenant registration or the seed output:
+```
+VITE_API_BASE_URL=http://localhost:3000
+VITE_API_KEY=ne_test_your_key_here
+```
+Then start:
 ```bash
 npm run dev --workspace=@notifyengine/dashboard
 ```
@@ -73,7 +80,27 @@ npm run dev --workspace=@notifyengine/dashboard
 
 ## Testing the API
 
-Replace `YOUR_API_KEY` with a key from the seed output.
+### Health check
+
+```bash
+curl http://localhost:3000/health
+```
+
+Expected: `{"status":"ok"}`
+
+### Register a tenant
+
+This creates a tenant with an API key and default channels. You can also use a key from the seed output.
+
+```bash
+curl -X POST http://localhost:3000/v1/tenants/register \
+  -H "Content-Type: application/json" \
+  -d '{"company_name": "My Company"}'
+```
+
+Expected: `201 Created` with `tenant_id`, `api_key`, and `slug`. Save the API key — it is shown once and never stored.
+
+Replace `YOUR_API_KEY` with the key from registration or seed output in all commands below.
 
 ### Send a notification
 
@@ -90,7 +117,7 @@ curl -X POST http://localhost:3000/v1/notifications \
   }'
 ```
 
-Expected response: `202 Accepted` with notification ID and status URL.
+Expected: `202 Accepted` with notification ID and status URL.
 
 ### Get notification status
 
@@ -99,7 +126,35 @@ curl http://localhost:3000/v1/notifications/NOTIFICATION_ID \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Expected response: `200 OK` with notification details, routing decision, and delivery attempts.
+Expected: `200 OK` with notification details, delivery attempts, and routing decision.
+
+### List notifications (cursor pagination)
+
+```bash
+curl "http://localhost:3000/v1/notifications?limit=10" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Expected: `200 OK` with `data` array and `pagination` object (`nextCursor`, `hasNextPage`, `limit`).
+
+### Notification summary
+
+```bash
+curl http://localhost:3000/v1/notifications/summary \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Expected: `200 OK` with counts: `total`, `delivered`, `failed`, `queued`, `processing`.
+
+### Email open tracking
+
+After a notification is delivered, simulate the tracking pixel being loaded:
+
+```bash
+curl "http://localhost:3000/v1/engagement/track?nid=NOTIFICATION_ID"
+```
+
+Expected: `200` with a 1x1 transparent GIF. The delivery attempt's `engaged` field is set to `true`.
 
 ## Environment Variables
 
