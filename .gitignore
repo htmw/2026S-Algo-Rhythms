@@ -36,6 +36,7 @@ dist/
 build/
 *.tsbuildinfo
 .turbo/
+.vite/
 coverage/
 *.lcov
 .nyc_output/
