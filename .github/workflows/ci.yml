@@ -95,6 +95,7 @@ jobs:
   python-tests:
     name: Python Tests
     runs-on: ubuntu-latest
+    if: hashFiles('apps/ml-service/requirements.txt') != ''
     steps:
       - name: Checkout
         uses: actions/checkout@v4
