@@ -157,3 +157,4 @@ playwright-report/
 *.orig
 *.patch
 .cache/
+apps/dashboard/.vite/
