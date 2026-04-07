@@ -39,6 +39,7 @@ services:
     env_file: .env
     volumes:
       - ./apps/ml-service:/app
+      - mlmodels:/app/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,6 +57,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+  mlmodels:
 
 networks:
   notifyengine:

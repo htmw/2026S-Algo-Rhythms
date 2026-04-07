@@ -12,6 +12,8 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY --chown=appuser:appuser . .
 
+RUN mkdir -p /app/models/active && chown -R appuser:appuser /app/models
+
 USER appuser
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

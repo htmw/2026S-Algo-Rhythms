@@ -1,256 +1,150 @@
-import json
-import os
+"""Synthetic delivery-attempt generator for bootstrap training and tests.
+
+Generates labeled examples with hidden user archetypes — the model learns to
+discover the per-user channel preferences from feature signals alone.
+
+Per tech-spec 5.9. Returns a pandas DataFrame matching the columns the trainer
+expects (one row per delivery attempt with `engaged` as the binary label).
+"""
+from __future__ import annotations
+
 import random
-import uuid
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from typing import Sequence
 
-import psycopg2
-from faker import Faker
+import numpy as np
+import pandas as pd
 
-fake = Faker()
+CHANNELS: list[str] = ["email", "websocket", "sms_webhook"]
+PRIORITIES: list[str] = ["critical", "high", "standard", "bulk"]
+PRIORITY_SCORE: dict[str, int] = {"critical": 4, "high": 3, "standard": 2, "bulk": 1}
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL environment variable is required")
-
-TOTAL_EXAMPLES = 10000
-PROFILES = ["email_fan", "push_fan", "mixed"]
-CHANNELS = ["email", "websocket", "sms_webhook"]
-
-
-def choose_profile() -> str:
-    return random.choice(PROFILES)
+ARCHETYPES: list[str] = [
+    "email_lover",
+    "push_responsive",
+    "sms_only",
+    "time_sensitive",
+    "disengaged",
+]
 
 
-def choose_channel(profile: str) -> str:
-    if profile == "email_fan":
-        return random.choices(["email", "websocket", "sms_webhook"], weights=[0.7, 0.2, 0.1])[0]
-    if profile == "push_fan":
-        return random.choices(["email", "websocket", "sms_webhook"], weights=[0.1, 0.6, 0.3])[0]
-    return random.choice(CHANNELS)
+@dataclass
+class ArchetypeProfile:
+    """Per-channel base engagement rate for one archetype."""
+    base_rates: dict[str, float]
+    time_sensitive: bool = False
 
 
-def choose_engagement(profile: str, channel: str) -> bool:
-    if profile == "email_fan" and channel == "email":
-        return random.random() < 0.85
-    if profile == "push_fan" and channel in ("websocket", "sms_webhook"):
-        return random.random() < 0.8
-    if profile == "mixed":
-        return random.random() < 0.55
-    return random.random() < 0.3
+ARCHETYPE_PROFILES: dict[str, ArchetypeProfile] = {
+    "email_lover": ArchetypeProfile(
+        base_rates={"email": 0.85, "websocket": 0.20, "sms_webhook": 0.15}
+    ),
+    "push_responsive": ArchetypeProfile(
+        base_rates={"email": 0.20, "websocket": 0.85, "sms_webhook": 0.40}
+    ),
+    "sms_only": ArchetypeProfile(
+        base_rates={"email": 0.05, "websocket": 0.10, "sms_webhook": 0.80}
+    ),
+    "time_sensitive": ArchetypeProfile(
+        base_rates={"email": 0.40, "websocket": 0.70, "sms_webhook": 0.60},
+        time_sensitive=True,
+    ),
+    "disengaged": ArchetypeProfile(
+        base_rates={"email": 0.05, "websocket": 0.05, "sms_webhook": 0.05}
+    ),
+}
 
 
-def build_feature_vector(profile: str, channel: str) -> dict:
-    return {
-        "profile": profile,
-        "channel_type": channel,
-        "hour_of_day": random.randint(0, 23),
-        "day_of_week": random.randint(0, 6),
-        "is_weekend": random.choice([0, 1]),
-        "historical_success_rate": round(random.uniform(0.2, 0.95), 3),
-        "historical_engagement_rate": round(random.uniform(0.1, 0.9), 3),
-        "hours_since_last_engagement": round(random.uniform(1, 240), 2),
-        "hours_since_last_success": round(random.uniform(1, 168), 2),
-        "avg_latency_ms": random.randint(50, 2500),
-        "attempts_30d": random.randint(1, 50),
-        "notifications_sent_24h": random.randint(0, 10),
-        "notifications_sent_7d": random.randint(0, 40),
-        "notification_priority_score": random.choice([1, 2, 3, 4]),
-        "content_length": random.randint(20, 500),
-        "channel_health": round(random.uniform(0.7, 1.0), 2),
-    }
+class SyntheticDataGenerator:
+    """Builds a labeled DataFrame for model training."""
 
+    FEATURE_COLUMNS: list[str] = [
+        "channel_type",
+        "hour_of_day",
+        "day_of_week",
+        "is_weekend",
+        "historical_success_rate",
+        "historical_engagement_rate",
+        "hours_since_last_engagement",
+        "hours_since_last_success",
+        "avg_latency_ms",
+        "attempts_30d",
+        "notifications_sent_24h",
+        "notifications_sent_7d",
+        "notification_priority_score",
+        "content_length",
+        "channel_health",
+    ]
 
-def fetch_reference_ids(cur):
-    cur.execute("SELECT id FROM tenants ORDER BY created_at LIMIT 1")
-    tenant_row = cur.fetchone()
-    if not tenant_row:
-        raise RuntimeError("No tenant found. Run the seed script first.")
+    def __init__(self, seed: int = 42) -> None:
+        self.rng = random.Random(seed)
+        self.np_rng = np.random.default_rng(seed)
 
-    tenant_id = tenant_row[0]
+    def _engagement_probability(
+        self,
+        archetype: str,
+        channel: str,
+        hour_of_day: int,
+        notifications_sent_24h: int,
+    ) -> float:
+        profile = ARCHETYPE_PROFILES[archetype]
+        base = profile.base_rates[channel]
+        if profile.time_sensitive:
+            if 9 <= hour_of_day <= 18:
+                base = min(1.0, base * 1.25)
+            elif hour_of_day < 6 or hour_of_day > 22:
+                base *= 0.4
+        fatigue_penalty = max(0.0, 1.0 - (notifications_sent_24h * 0.07))
+        return float(np.clip(base * fatigue_penalty, 0.0, 1.0))
 
-    cur.execute(
-        """
-        SELECT id, type
-        FROM channels
-        WHERE tenant_id = %s
-        """,
-        (tenant_id,),
-    )
-    channel_rows = cur.fetchall()
-    if not channel_rows:
-        raise RuntimeError("No channels found for tenant. Seed data may be missing.")
+    def _make_row(self, archetype: str) -> dict[str, object]:
+        channel = self.rng.choice(CHANNELS)
+        hour_of_day = self.rng.randint(0, 23)
+        day_of_week = self.rng.randint(0, 6)
+        notifications_sent_24h = self.rng.randint(0, 8)
+        priority = self.rng.choice(PRIORITIES)
 
-    channel_map = {channel_type: channel_id for channel_id, channel_type in channel_rows}
-    return tenant_id, channel_map
-
-
-def create_notification(cur, tenant_id: str, recipient: str, channel: str) -> str:
-    notification_id = str(uuid.uuid4())
-    routing_mode = "adaptive"
-    priority = random.choice(["critical", "high", "standard", "bulk"])
-
-    cur.execute(
-        """
-        INSERT INTO notifications (
-            id, tenant_id, recipient, subject, body, priority, routing_mode, status,
-            delivered_via, delivered_at, metadata, created_at, updated_at
+        engagement_p = self._engagement_probability(
+            archetype, channel, hour_of_day, notifications_sent_24h
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s::jsonb, NOW(), NOW())
-        """,
-        (
-            notification_id,
-            tenant_id,
-            recipient,
-            fake.sentence(nb_words=4),
-            fake.text(max_nb_chars=120),
-            priority,
-            routing_mode,
-            "delivered",
-            channel,
-            json.dumps({"source": "synthetic_generator"}),
-        ),
-    )
-    return notification_id
+        engaged = int(self.rng.random() < engagement_p)
 
-
-def insert_delivery_attempt(cur, tenant_id: str, notification_id: str, channel_id: str, channel: str, engaged: bool, feature_vector: dict):
-    started_at = datetime.now() - timedelta(days=random.randint(0, 30), minutes=random.randint(0, 1440))
-    duration_ms = random.randint(50, 2500)
-    completed_at = started_at + timedelta(milliseconds=duration_ms)
-
-    if engaged:
-        status = "success"
-        status_code = 200
-        error_message = None
-        engagement_type = random.choice(["email_open", "ws_ack", "webhook_2xx"])
-        engaged_at = completed_at + timedelta(minutes=random.randint(1, 180))
-    else:
-        status = random.choice(["success", "failure", "timeout"])
-        status_code = 200 if status == "success" else random.choice([408, 500, 502])
-        error_message = None if status == "success" else random.choice(["timeout", "provider error", "temporary failure"])
-        engagement_type = None
-        engaged_at = None
-
-    cur.execute(
-        """
-        INSERT INTO delivery_attempts (
-            tenant_id, notification_id, channel_id, channel_type,
-            attempt_number, status, status_code, error_message,
-            engaged, engaged_at, engagement_type,
-            started_at, completed_at, duration_ms, feature_vector
+        affinity = ARCHETYPE_PROFILES[archetype].base_rates[channel]
+        historical_success_rate = float(
+            np.clip(self.np_rng.normal(0.5 + affinity * 0.3, 0.1), 0.0, 1.0)
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-        """,
-        (
-            tenant_id,
-            notification_id,
-            channel_id,
-            channel,
-            1,
-            status,
-            status_code,
-            error_message,
-            engaged,
-            engaged_at,
-            engagement_type,
-            started_at,
-            completed_at,
-            duration_ms,
-            json.dumps(feature_vector),
-        ),
-    )
-    return duration_ms, engaged_at, status
-
-
-def upsert_recipient_stats(cur, tenant_id: str, recipient: str, channel: str, engaged: bool, duration_ms: int, status: str, engaged_at):
-    successes = 1 if status == "success" else 0
-    engagements = 1 if engaged else 0
-    last_success_at = datetime.now() if successes else None
-    last_failure_at = datetime.now() if status in ("failure", "timeout") else None
-
-    cur.execute(
-        """
-        INSERT INTO recipient_channel_stats (
-            tenant_id, recipient, channel_type, attempts_30d, successes_30d, engagements_30d,
-            avg_latency_ms, last_success_at, last_engaged_at, last_failure_at,
-            notifications_received_24h, notifications_received_7d, updated_at
+        historical_engagement_rate = float(
+            np.clip(self.np_rng.normal(affinity, 0.1), 0.0, 1.0)
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-        ON CONFLICT (tenant_id, recipient, channel_type)
-        DO UPDATE SET
-            attempts_30d = recipient_channel_stats.attempts_30d + 1,
-            successes_30d = recipient_channel_stats.successes_30d + EXCLUDED.successes_30d,
-            engagements_30d = recipient_channel_stats.engagements_30d + EXCLUDED.engagements_30d,
-            avg_latency_ms = EXCLUDED.avg_latency_ms,
-            last_success_at = COALESCE(EXCLUDED.last_success_at, recipient_channel_stats.last_success_at),
-            last_engaged_at = COALESCE(EXCLUDED.last_engaged_at, recipient_channel_stats.last_engaged_at),
-            last_failure_at = COALESCE(EXCLUDED.last_failure_at, recipient_channel_stats.last_failure_at),
-            notifications_received_24h = recipient_channel_stats.notifications_received_24h + 1,
-            notifications_received_7d = recipient_channel_stats.notifications_received_7d + 1,
-            updated_at = NOW()
-        """,
-        (
-            tenant_id,
-            recipient,
-            channel,
-            1,
-            successes,
-            engagements,
-            float(duration_ms),
-            last_success_at,
-            engaged_at,
-            last_failure_at,
-            random.randint(0, 5),
-            random.randint(1, 20),
-        ),
-    )
 
+        return {
+            "archetype": archetype,
+            "channel_type": channel,
+            "hour_of_day": hour_of_day,
+            "day_of_week": day_of_week,
+            "is_weekend": 1 if day_of_week >= 5 else 0,
+            "historical_success_rate": historical_success_rate,
+            "historical_engagement_rate": historical_engagement_rate,
+            "hours_since_last_engagement": float(self.np_rng.exponential(48.0)),
+            "hours_since_last_success": float(self.np_rng.exponential(24.0)),
+            "avg_latency_ms": float(self.np_rng.uniform(50, 2500)),
+            "attempts_30d": int(self.np_rng.integers(0, 60)),
+            "notifications_sent_24h": notifications_sent_24h,
+            "notifications_sent_7d": int(self.np_rng.integers(0, 40)),
+            "notification_priority_score": PRIORITY_SCORE[priority],
+            "content_length": int(self.np_rng.integers(20, 500)),
+            "channel_health": float(self.rng.choices([1.0, 0.0], weights=[0.95, 0.05])[0]),
+            "engaged": engaged,
+        }
 
-def main():
-    conn = psycopg2.connect(DATABASE_URL)
-    cur = conn.cursor()
-
-    try:
-        tenant_id, channel_map = fetch_reference_ids(cur)
-
-        # Set tenant context for RLS
-        cur.execute("SELECT set_config('app.current_tenant_id', %s, false)", (str(tenant_id),))
-
-        inserted = 0
-        for _ in range(TOTAL_EXAMPLES):
-            profile = choose_profile()
-            channel = choose_channel(profile)
-
-            if channel not in channel_map:
-                continue
-
-            recipient = fake.email()
-            engaged = choose_engagement(profile, channel)
-            feature_vector = build_feature_vector(profile, channel)
-
-            notification_id = create_notification(cur, tenant_id, recipient, channel)
-            duration_ms, engaged_at, status = insert_delivery_attempt(
-                cur,
-                tenant_id,
-                notification_id,
-                channel_map[channel],
-                channel,
-                engaged,
-                feature_vector,
-            )
-            upsert_recipient_stats(cur, tenant_id, recipient, channel, engaged, duration_ms, status, engaged_at)
-            inserted += 1
-
-        conn.commit()
-        print(f"Inserted {inserted} synthetic delivery examples.")
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cur.close()
-        conn.close()
-
-
-if __name__ == "__main__":
-    main()
+    def generate(
+        self,
+        n_samples: int = 10_000,
+        archetypes: Sequence[str] | None = None,
+    ) -> pd.DataFrame:
+        archetypes = list(archetypes) if archetypes else ARCHETYPES
+        rows: list[dict[str, object]] = []
+        for _ in range(n_samples):
+            archetype = self.rng.choice(archetypes)
+            rows.append(self._make_row(archetype))
+        return pd.DataFrame(rows)
