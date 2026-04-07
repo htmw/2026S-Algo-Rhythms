@@ -2,7 +2,7 @@ import type {
   DeliveryChannel,
   NotificationPriority,
   NotificationStatus,
-  RoutingDecision,
+  RoutingMode,
 } from './types.js';
 
 export const DASHBOARD_EVENTS = {
@@ -19,77 +19,84 @@ export type DashboardEventName = typeof DASHBOARD_EVENTS[keyof typeof DASHBOARD_
 
 export type CircuitBreakerState = 'closed' | 'open' | 'half_open';
 
+export interface DeliveryRoutingInfo {
+  mode: RoutingMode;
+  exploration: boolean;
+  modelVersion: string | null;
+}
+
 export interface DeliveryCompletedPayload {
-  notification_id: string;
-  tenant_id: string;
+  notificationId: string;
+  recipient: string;
   channel: DeliveryChannel;
-  recipient_masked: string;
-  success: boolean;
-  attempt_number: number;
-  latency_ms: number;
-  error_code?: string;
-  occurred_at: string;
+  status: 'success' | 'failure';
+  statusCode: number | null;
+  durationMs: number;
+  attemptNumber: number;
+  routing: DeliveryRoutingInfo;
+  priority: NotificationPriority;
+  timestamp: string;
 }
 
 export interface NotificationStatusChangedPayload {
-  notification_id: string;
-  tenant_id: string;
-  previous_status: NotificationStatus;
-  new_status: NotificationStatus;
-  changed_at: string;
+  notificationId: string;
+  previousStatus: NotificationStatus;
+  newStatus: NotificationStatus;
+  channel: string | null;
+  timestamp: string;
 }
 
 export interface CircuitBreakerStateChangedPayload {
-  tenant_id: string;
-  channel_id: string;
-  channel: DeliveryChannel;
-  previous_state: CircuitBreakerState;
-  new_state: CircuitBreakerState;
-  failure_count: number;
-  changed_at: string;
+  channelType: DeliveryChannel;
+  previousState: CircuitBreakerState;
+  newState: CircuitBreakerState;
+  failureCount: number;
+  timestamp: string;
 }
 
+export type EngagementType = 'ws_ack' | 'email_open' | 'webhook_2xx' | 'link_click';
+
 export interface EngagementRecordedPayload {
-  notification_id: string;
-  tenant_id: string;
+  notificationId: string;
+  recipient: string;
   channel: DeliveryChannel;
-  recipient_masked: string;
-  engagement_type: 'open' | 'click' | 'ack';
-  engaged_at: string;
+  engagementType: EngagementType;
+  timestamp: string;
 }
 
 export interface NotificationEnqueuedPayload {
-  notification_id: string;
-  tenant_id: string;
-  recipient_masked: string;
+  notificationId: string;
+  recipient: string;
   priority: NotificationPriority;
-  queue: string;
-  enqueued_at: string;
+  routingMode: RoutingMode;
+  timestamp: string;
 }
 
 export interface DlqEntryAddedPayload {
-  notification_id: string;
-  tenant_id: string;
-  channel: DeliveryChannel;
-  recipient_masked: string;
-  attempts: number;
-  last_error_code: string;
-  last_error_message: string;
-  failed_at: string;
+  notificationId: string;
+  recipient: string;
+  lastChannel: DeliveryChannel;
+  lastError: string;
+  totalAttempts: number;
+  timestamp: string;
+}
+
+export interface ModelRetrainedMetrics {
+  accuracy: number;
+  aucRoc: number;
+  precision: number;
+  recall: number;
+  f1: number;
 }
 
 export interface ModelRetrainedPayload {
-  tenant_id: string | null;
-  model_version: string;
-  previous_version: string | null;
+  version: string;
   promoted: boolean;
-  metrics: {
-    auc?: number;
-    accuracy?: number;
-    sample_count?: number;
-  };
-  feature_importance?: Record<string, number>;
-  trained_at: string;
+  metrics: ModelRetrainedMetrics;
+  trainingSamples: number;
+  previousVersion: string | null;
+  previousAucRoc: number | null;
+  timestamp: string;
 }
 
 export interface DashboardEventEnvelope<T = unknown> {
@@ -107,5 +114,3 @@ export type DashboardEventPayloadMap = {
   [DASHBOARD_EVENTS.DLQ_ENTRY_ADDED]: DlqEntryAddedPayload;
   [DASHBOARD_EVENTS.MODEL_RETRAINED]: ModelRetrainedPayload;
 };
-
-export type { RoutingDecision };
