@@ -127,7 +127,9 @@ jobs:
 
       - name: pytest
         if: steps.check-ml.outputs.exists == 'true'
-        run: pytest
+        run: |
+          pip install pytest
+          pytest
         working-directory: apps/ml-service
 
   e2e-tests:
