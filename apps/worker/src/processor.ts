@@ -1,14 +1,30 @@
 import type { Job } from 'bullmq';
-import type { NotificationJob } from '@notifyengine/shared';
+import type { NotificationJob, NotificationPriority, RoutingMode } from '@notifyengine/shared';
 import { pool } from './db.js';
 import { deliverEmail } from './channels/email.js';
 import { logger } from './logger.js';
+import {
+  extractFeatures,
+  type CircuitState,
+  type FeatureVector,
+  type RecipientChannelStatsRow,
+} from './features.js';
+import { predictChannel } from './mlClient.js';
+import {
+  buildAdaptiveDecision,
+  buildAdaptiveFallbackDecision,
+  buildForcedDecision,
+  buildStaticDecision,
+  type RoutingDecisionRecord,
+} from './routingDecision.js';
 
 interface ChannelRow {
   id: string;
   type: string;
   label: string;
   config: Record<string, unknown>;
+  circuit_state: CircuitState;
+  priority: number;
 }
 
 interface NotificationRow {
@@ -16,6 +32,17 @@ interface NotificationRow {
   subject: string | null;
   body: string;
   body_html: string | null;
+}
+
+interface StatsRow extends RecipientChannelStatsRow {
+  channel_type: string;
+}
+
+const DEFAULT_EXPLORATION_RATE = 0.1;
+
+function deriveRoutingMode(job: NotificationJob): RoutingMode {
+  if (job.forceChannel) return 'forced';
+  return job.routingMode ?? 'static';
 }
 
 export async function processNotification(job: Job<NotificationJob>): Promise<void> {
@@ -27,13 +54,11 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
   try {
     await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
 
-    // Mark as processing
     await client.query(
       `UPDATE notifications SET status = 'processing', updated_at = NOW() WHERE id = $1`,
       [notificationId],
     );
 
-    // Fetch notification content
     const notifResult = await client.query<NotificationRow>(
       `SELECT recipient, subject, body, body_html FROM notifications WHERE id = $1`,
       [notificationId],
@@ -44,50 +69,30 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       throw new Error(`Notification ${notificationId} not found`);
     }
 
-    // ── Channel selection ──
-    // Sprint 1: all routing modes (adaptive, static, forced) use static channel
-    // priority ordering. Sprint 2 will replace the adaptive branch with an HTTP
-    // call to the ML service (POST http://ml-service:8000/predict) to get
-    // per-channel engagement probabilities and apply epsilon-greedy exploration.
-    let channels: ChannelRow[];
+    // ── Fetch eligible channels ──
+    const routingMode = deriveRoutingMode(job.data);
 
-    if (job.data.forceChannel) {
-      // forced mode: single channel, no fallback
-      const result = await client.query<ChannelRow>(
-        `SELECT id, type, label, config FROM channels
-         WHERE tenant_id = $1 AND type = $2 AND is_enabled = true AND circuit_state = 'closed'
-         LIMIT 1`,
+    let channelsResult;
+    if (routingMode === 'forced' && job.data.forceChannel) {
+      channelsResult = await client.query<ChannelRow>(
+        `SELECT id, type, label, config, circuit_state, priority
+           FROM channels
+          WHERE tenant_id = $1 AND type = $2 AND is_enabled = true AND circuit_state = 'closed'
+          LIMIT 1`,
         [tenantId, job.data.forceChannel],
       );
-      channels = result.rows;
-    } else if (job.data.channelPreference && job.data.channelPreference.length > 0) {
-      // static mode with explicit preference order
-      const result = await client.query<ChannelRow>(
-        `SELECT id, type, label, config FROM channels
-         WHERE tenant_id = $1 AND is_enabled = true AND circuit_state = 'closed'
-         ORDER BY priority DESC`,
-        [tenantId],
-      );
-      const preferenceOrder = job.data.channelPreference;
-      channels = result.rows.sort((a, b) => {
-        const aIdx = preferenceOrder.indexOf(a.type);
-        const bIdx = preferenceOrder.indexOf(b.type);
-        const aPos = aIdx === -1 ? Infinity : aIdx;
-        const bPos = bIdx === -1 ? Infinity : bIdx;
-        return aPos - bPos;
-      });
     } else {
-      // adaptive (Sprint 1 fallback) and default static: priority DESC
-      const result = await client.query<ChannelRow>(
-        `SELECT id, type, label, config FROM channels
-         WHERE tenant_id = $1 AND is_enabled = true AND circuit_state = 'closed'
-         ORDER BY priority DESC`,
+      channelsResult = await client.query<ChannelRow>(
+        `SELECT id, type, label, config, circuit_state, priority
+           FROM channels
+          WHERE tenant_id = $1 AND is_enabled = true AND circuit_state = 'closed'
+          ORDER BY priority DESC`,
         [tenantId],
       );
-      channels = result.rows;
     }
+    const eligibleChannels = channelsResult.rows;
 
-    if (channels.length === 0) {
+    if (eligibleChannels.length === 0) {
       log.warn('No available channels for tenant');
       await client.query(
         `UPDATE notifications SET status = 'failed', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
@@ -96,8 +101,89 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       throw new Error('No available channels');
     }
 
+    // ── Fetch recipient stats for feature extraction ──
+    const statsResult = await client.query<StatsRow>(
+      `SELECT channel_type, attempts_30d, successes_30d, engagements_30d,
+              avg_latency_ms, last_success_at, last_engaged_at,
+              notifications_received_24h, notifications_received_7d
+         FROM recipient_channel_stats
+        WHERE tenant_id = $1 AND recipient = $2`,
+      [tenantId, notification.recipient],
+    );
+    const statsByChannel = new Map<string, RecipientChannelStatsRow>();
+    for (const row of statsResult.rows) {
+      statsByChannel.set(row.channel_type, row);
+    }
+
+    // ── Build feature vectors per channel ──
+    const featuresByChannel = new Map<string, FeatureVector>();
+    for (const channel of eligibleChannels) {
+      featuresByChannel.set(
+        channel.type,
+        extractFeatures({
+          channelType: channel.type,
+          priority: priority as NotificationPriority,
+          bodyLength: notification.body.length,
+          circuitState: channel.circuit_state,
+          stats: statsByChannel.get(channel.type) ?? null,
+        }),
+      );
+    }
+
+    // ── Routing decision ──
+    let orderedChannels = eligibleChannels;
+    let routingDecision: RoutingDecisionRecord;
+
+    if (routingMode === 'forced') {
+      routingDecision = buildForcedDecision(eligibleChannels[0].type);
+    } else if (routingMode === 'static') {
+      const preference = job.data.channelPreference;
+      if (preference && preference.length > 0) {
+        orderedChannels = [...eligibleChannels].sort((a, b) => {
+          const aIdx = preference.indexOf(a.type);
+          const bIdx = preference.indexOf(b.type);
+          const aPos = aIdx === -1 ? Infinity : aIdx;
+          const bPos = bIdx === -1 ? Infinity : bIdx;
+          return aPos - bPos;
+        });
+      }
+      routingDecision = buildStaticDecision(orderedChannels[0].type);
+    } else {
+      // adaptive
+      const featuresPerChannel: Record<string, FeatureVector> = {};
+      for (const [k, v] of featuresByChannel.entries()) {
+        featuresPerChannel[k] = v;
+      }
+      const ml = await predictChannel({
+        recipient: notification.recipient,
+        available_channels: eligibleChannels.map((c) => c.type),
+        features_per_channel: featuresPerChannel,
+        exploration_rate: DEFAULT_EXPLORATION_RATE,
+      });
+
+      if (ml && featuresByChannel.has(ml.selected)) {
+        orderedChannels = [
+          ...eligibleChannels.filter((c) => c.type === ml.selected),
+          ...eligibleChannels.filter((c) => c.type !== ml.selected),
+        ];
+        routingDecision = buildAdaptiveDecision(ml);
+      } else {
+        log.warn('Adaptive routing falling back to static priority order');
+        routingDecision = buildAdaptiveFallbackDecision(
+          orderedChannels[0].type,
+          'ML service unreachable; fell back to static priority order',
+        );
+      }
+    }
+
+    // Persist routing_decision on the notification record
+    await client.query(
+      `UPDATE notifications SET routing_decision = $2::jsonb, updated_at = NOW() WHERE id = $1`,
+      [notificationId, JSON.stringify(routingDecision)],
+    );
+
     // ── Try each channel in order ──
-    for (const channel of channels) {
+    for (const channel of orderedChannels) {
       const startedAt = new Date();
       let success = false;
       let statusCode: number | null = null;
@@ -114,22 +200,24 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
         statusCode = result.statusCode ?? null;
         errorMessage = result.error ?? null;
       } else {
-        // Sprint 1: only email is implemented
-        log.info({ channelType: channel.type, channelId: channel.id }, 'Channel type not yet implemented - skipping');
+        log.info(
+          { channelType: channel.type, channelId: channel.id },
+          'Channel type not yet implemented - skipping',
+        );
         continue;
       }
 
       const completedAt = new Date();
       const durationMs = completedAt.getTime() - startedAt.getTime();
       const attemptStatus = success ? 'success' : 'failure';
+      const featureVector = featuresByChannel.get(channel.type) ?? null;
 
-      // Record delivery attempt
       await client.query(
         `INSERT INTO delivery_attempts (
            tenant_id, notification_id, channel_id, channel_type,
            attempt_number, status, status_code, error_message,
-           started_at, completed_at, duration_ms
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+           started_at, completed_at, duration_ms, feature_vector
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
         [
           tenantId,
           notificationId,
@@ -142,24 +230,27 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
           startedAt,
           completedAt,
           durationMs,
+          featureVector ? JSON.stringify(featureVector) : null,
         ],
       );
 
       if (success) {
         await client.query(
           `UPDATE notifications
-           SET status = 'delivered', delivered_via = $2, delivered_at = NOW(), updated_at = NOW()
-           WHERE id = $1`,
+              SET status = 'delivered', delivered_via = $2, delivered_at = NOW(), updated_at = NOW()
+            WHERE id = $1`,
           [notificationId, channel.type],
         );
         log.info({ channelType: channel.type, durationMs }, 'Notification delivered');
         return;
       }
 
-      log.warn({ channelType: channel.type, error: errorMessage, durationMs }, 'Channel delivery failed - trying next');
+      log.warn(
+        { channelType: channel.type, error: errorMessage, durationMs },
+        'Channel delivery failed - trying next',
+      );
     }
 
-    // All channels exhausted
     await client.query(
       `UPDATE notifications SET status = 'failed', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [notificationId],
