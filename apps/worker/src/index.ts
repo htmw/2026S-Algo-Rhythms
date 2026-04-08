@@ -5,12 +5,16 @@ import type { NotificationJob } from '@notifyengine/shared';
 import { processNotification } from './processor.js';
 import { pool } from './db.js';
 import { logger } from './logger.js';
+import { setupRetrainScheduler } from './retrainScheduler.js';
 
 const connection = {
   url: process.env.REDIS_URL || 'redis://localhost:6379',
 };
 
 const dlqQueue = new Queue(QUEUE_NAMES.DLQ, { connection });
+
+// SCRUM-164 — periodic ML retrain scheduler (spec 5.6, every 6h)
+const retrainScheduler = setupRetrainScheduler(connection);
 
 // ── One worker per priority queue ──
 const queueConfigs = [
@@ -76,6 +80,7 @@ const workers = queueConfigs.map(({ name, concurrency }) => {
 async function shutdown(): Promise<void> {
   logger.info('Shutting down workers...');
   await Promise.all(workers.map((w) => w.close()));
+  await retrainScheduler.close();
   await dlqQueue.close();
   await pool.end();
   logger.info('All workers stopped');
