@@ -7,6 +7,7 @@ for the worker to call, plus /health and /model/info.
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -93,6 +94,17 @@ class ModelInfoResponse(BaseModel):
     feature_importance: dict[str, float] | None = None
 
 
+class TrainRequest(BaseModel):
+    tenant_id: str | None = None
+
+
+class TrainResponse(BaseModel):
+    promoted: bool
+    version: str | None = None
+    metrics: dict[str, float] | None = None
+    message: str
+
+
 # ───────────────────────── routes ─────────────────────────
 
 
@@ -132,6 +144,44 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
         features_per_channel=normalized,
     )
     return PredictionResponse(**decision)
+
+
+@app.post("/train", response_model=TrainResponse)
+async def train(request: TrainRequest) -> TrainResponse:
+    global model
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise HTTPException(
+            status_code=503,
+            detail="DATABASE_URL not configured — cannot retrain from delivery_attempts",
+        )
+
+    try:
+        new_model = trainer.retrain_from_db(
+            database_url=database_url,
+            tenant_id=request.tenant_id,
+            current_model=model,
+        )
+    except Exception as err:
+        logger.exception("Retraining failed")
+        raise HTTPException(status_code=500, detail=f"Retraining failed: {err}") from err
+
+    if new_model is None:
+        return TrainResponse(
+            promoted=False,
+            version=model.version if model is not None else None,
+            metrics=model.metrics if model is not None else None,
+            message="Not enough training data or new model did not beat current AUC",
+        )
+
+    model = new_model
+    return TrainResponse(
+        promoted=True,
+        version=new_model.version,
+        metrics=new_model.metrics,
+        message="New model trained and promoted",
+    )
 
 
 if __name__ == "__main__":

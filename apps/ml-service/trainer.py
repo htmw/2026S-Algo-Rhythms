@@ -129,6 +129,8 @@ class ModelTrainer:
 
         import psycopg2  # type: ignore
 
+        from features import DEFAULTS as FEATURE_DEFAULTS
+
         cutoff = datetime.utcnow() - timedelta(days=30)
 
         conn = psycopg2.connect(database_url)
@@ -148,6 +150,7 @@ class ModelTrainer:
                      WHERE da.started_at >= %s
                        AND da.status = 'success'
                        AND da.engaged IS NOT NULL
+                       AND da.feature_vector IS NOT NULL
                        AND (%s::uuid IS NULL OR n.tenant_id = %s::uuid)
                     """,
                     (cutoff, tenant_id, tenant_id),
@@ -167,6 +170,12 @@ class ModelTrainer:
         records = []
         for channel_type, engaged, feature_vector, _priority in rows:
             features = feature_vector if isinstance(feature_vector, dict) else json.loads(feature_vector or "{}")
+            # Backfill any missing feature keys with canonical defaults so legacy
+            # rows with partial feature_vector payloads don't drop columns from
+            # the resulting DataFrame.
+            for key, default in FEATURE_DEFAULTS.items():
+                if features.get(key) is None:
+                    features[key] = default
             features["channel_type"] = channel_type
             features["engaged"] = 1 if engaged else 0
             records.append(features)
