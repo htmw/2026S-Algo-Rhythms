@@ -158,3 +158,9 @@ playwright-report/
 *.patch
 .cache/
 apps/dashboard/.vite/
+
+# Local test scripts
+scripts/
+
+# ML model artifacts
+apps/ml-service/models/
