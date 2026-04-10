@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-type EventHandler = (payload: unknown) => void;
 export type SocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+type EventHandler = (payload: unknown) => void;
 
 function getApiKey(): string {
   return import.meta.env.VITE_API_KEY ?? '';
@@ -18,18 +19,17 @@ export function useDashboardSocket() {
       transports: ['websocket'],
     });
     socketRef.current = socket;
+
     socket.on('connect', () => {
       setStatus('connected');
-      console.debug('[Socket] Connected:', socket.id);
     });
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', () => {
       setStatus('disconnected');
-      console.debug('[Socket] Disconnected:', reason);
     });
-    socket.on('connect_error', (err) => {
+    socket.on('connect_error', () => {
       setStatus('error');
-      console.error('[Socket] Error:', err.message);
     });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

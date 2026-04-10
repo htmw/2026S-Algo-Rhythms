@@ -9,8 +9,7 @@ export function useNotificationSummary() {
   const { on } = useDashboardSocket();
 
   useEffect(() => {
-    const off1 = on('delivery.completed', (payload: unknown) => {
-      const p = payload as { status?: string };
+  const off1 = on('delivery.completed', (_payload: unknown) => {
       queryClient.setQueryData<NotificationSummary>(
         ['notification-summary'],
         (old) => {

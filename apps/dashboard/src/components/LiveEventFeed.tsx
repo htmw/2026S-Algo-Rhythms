@@ -1,11 +1,36 @@
 import { useState, useEffect, useRef } from 'react';
 import { useDashboardSocket } from '../hooks/useDashboardSocket';
-import type {
-  DeliveryCompletedPayload,
-  NotificationEnqueuedPayload,
-  NotificationStatusChangedPayload,
-  EngagementRecordedPayload,
-} from '@notifyengine/shared';
+
+interface DeliveryCompletedPayload {
+  notificationId: string;
+  recipient: string;
+  channel: string;
+  status: 'success' | 'failure';
+  durationMs: number;
+  attemptNumber: number;
+  timestamp: string;
+}
+interface NotificationEnqueuedPayload {
+  notificationId: string;
+  recipient: string;
+  priority: string;
+  routingMode: string;
+  timestamp: string;
+}
+interface NotificationStatusChangedPayload {
+  notificationId: string;
+  previousStatus: string;
+  newStatus: string;
+  channel?: string;
+  timestamp: string;
+}
+interface EngagementRecordedPayload {
+  notificationId: string;
+  recipient: string;
+  channel: string;
+  engagementType: string;
+  timestamp: string;
+}
 
 interface FeedEvent {
   id: string;
@@ -18,11 +43,11 @@ interface FeedEvent {
 }
 
 const TYPE_CONFIG = {
-  enqueued:       { label: 'Sent',     bg: '#E6F1FB', color: '#185FA5', dot: '#378ADD' },
+  enqueued:       { label: 'Sent',      bg: '#E6F1FB', color: '#185FA5', dot: '#378ADD' },
   delivered:      { label: 'Delivered', bg: '#E1F5EE', color: '#0F6E56', dot: '#1D9E75' },
-  failed:         { label: 'Failed',   bg: '#FCEBEB', color: '#A32D2D', dot: '#E24B4A' },
-  engaged:        { label: 'Engaged',  bg: '#FAEEDA', color: '#854F0B', dot: '#EF9F27' },
-  status_changed: { label: 'Updated',  bg: '#F1EFE8', color: '#5F5E5A', dot: '#888780' },
+  failed:         { label: 'Failed',    bg: '#FCEBEB', color: '#A32D2D', dot: '#E24B4A' },
+  engaged:        { label: 'Engaged',   bg: '#FAEEDA', color: '#854F0B', dot: '#EF9F27' },
+  status_changed: { label: 'Updated',   bg: '#F1EFE8', color: '#5F5E5A', dot: '#888780' },
 };
 
 function EventRow({ event }: { event: FeedEvent }) {
@@ -41,13 +66,10 @@ function EventRow({ event }: { event: FeedEvent }) {
       borderBottom: '1px solid #F1EFE8',
       animation: 'slideDown 0.2s ease-out',
     }}>
-      {/* Status dot */}
       <div style={{
         width: 8, height: 8, borderRadius: '50%',
         background: config.dot, marginTop: 5, flexShrink: 0,
       }} />
-
-      {/* Content */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{
@@ -69,8 +91,6 @@ function EventRow({ event }: { event: FeedEvent }) {
           {event.detail}
         </div>
       </div>
-
-      {/* Time */}
       <span style={{
         fontSize: 11, color: '#888780',
         fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
@@ -162,7 +182,6 @@ export function LiveEventFeed() {
         }
       `}</style>
 
-      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between',
@@ -199,7 +218,6 @@ export function LiveEventFeed() {
         )}
       </div>
 
-      {/* Event list */}
       <div style={{ maxHeight: 400, overflowY: 'auto' }}>
         {events.length === 0 ? (
           <div style={{
@@ -215,7 +233,6 @@ export function LiveEventFeed() {
         )}
       </div>
 
-      {/* Footer */}
       {events.length > 0 && (
         <div style={{
           padding: '6px 16px', fontSize: 11, color: '#888780',
