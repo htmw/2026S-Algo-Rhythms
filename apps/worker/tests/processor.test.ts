@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Job } from 'bullmq';
 import type { NotificationJob } from '@notifyengine/shared';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
+import type { DashboardEventPublisher } from '../src/dashboardEvents.js';
 
 // ── Hoisted mocks ──
 const { mockPoolConnect, mockDeliverEmail, mockPredictChannel } = vi.hoisted(() => ({
@@ -412,5 +414,198 @@ describe('processNotification', () => {
     expect(rdJson.mode).toBe('adaptive');
     expect(rdJson.model_version).toBeNull();
     expect(rdJson.reason).toContain('fell back to static');
+  });
+});
+
+// ── Dashboard event publish tests ──
+
+function makeMockPublisher(): DashboardEventPublisher & { emit: ReturnType<typeof vi.fn> } {
+  return {
+    emit: vi.fn(),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe('processNotification — dashboard events', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('emits delivery.completed and notification.status_changed=delivered on success', async () => {
+    const client = setupHappyPathClient();
+    mockPoolConnect.mockResolvedValueOnce(client);
+    mockDeliverEmail.mockResolvedValueOnce({ success: true, statusCode: 200 });
+    const publisher = makeMockPublisher();
+
+    await processNotification(makeJob(), publisher);
+
+    const emitCalls = publisher.emit.mock.calls;
+
+    // 1st emit: notification.status_changed queued→processing
+    expect(emitCalls[0][0]).toBe(TENANT_ID);
+    expect(emitCalls[0][1]).toBe(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED);
+    expect(emitCalls[0][2]).toMatchObject({
+      notificationId: NOTIF_ID,
+      previousStatus: 'queued',
+      newStatus: 'processing',
+      channel: null,
+    });
+    expect(emitCalls[0][2].timestamp).toBeDefined();
+
+    // 2nd emit: delivery.completed with success
+    expect(emitCalls[1][1]).toBe(DASHBOARD_EVENTS.DELIVERY_COMPLETED);
+    const deliveryPayload = emitCalls[1][2];
+    expect(deliveryPayload).toMatchObject({
+      notificationId: NOTIF_ID,
+      recipient: 'us***@example.com',
+      channel: 'email',
+      status: 'success',
+      statusCode: 200,
+      attemptNumber: 1,
+      priority: 'standard',
+      routing: {
+        mode: 'static',
+        exploration: false,
+        modelVersion: null,
+      },
+    });
+    expect(typeof deliveryPayload.durationMs).toBe('number');
+    expect(deliveryPayload.timestamp).toBeDefined();
+
+    // 3rd emit: notification.status_changed processing→delivered
+    expect(emitCalls[2][1]).toBe(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED);
+    expect(emitCalls[2][2]).toMatchObject({
+      notificationId: NOTIF_ID,
+      previousStatus: 'processing',
+      newStatus: 'delivered',
+      channel: 'email',
+    });
+
+    expect(publisher.emit).toHaveBeenCalledTimes(3);
+  });
+
+  it('emits delivery.completed with failure and notification.status_changed=failed', async () => {
+    const { client, pushResult } = makeMockClient();
+
+    pushResult([]); // set_config
+    pushResult([]); // UPDATE processing
+    pushResult([{   // SELECT notification
+      recipient: 'user@example.com',
+      subject: 'Test',
+      body: 'Hello',
+      body_html: null,
+    }]);
+    pushResult([{   // SELECT channels
+      id: CHANNEL_ID, type: 'email', label: 'Email',
+      config: {}, circuit_state: 'closed', priority: 10,
+    }]);
+    pushResult([]); // SELECT stats
+    pushResult([]); // UPDATE routing_decision
+    pushResult([]); // INSERT delivery_attempt
+    pushResult([]); // UPDATE status=failed
+    pushResult([]); // set_config reset
+
+    mockPoolConnect.mockResolvedValueOnce(client);
+    mockDeliverEmail.mockResolvedValueOnce({ success: false, error: 'SMTP timeout' });
+    const publisher = makeMockPublisher();
+
+    await expect(processNotification(makeJob(), publisher)).rejects.toThrow('All channels exhausted');
+
+    const emitCalls = publisher.emit.mock.calls;
+
+    // 1st: queued→processing
+    expect(emitCalls[0][1]).toBe(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED);
+    expect(emitCalls[0][2].newStatus).toBe('processing');
+
+    // 2nd: delivery.completed with failure
+    expect(emitCalls[1][1]).toBe(DASHBOARD_EVENTS.DELIVERY_COMPLETED);
+    expect(emitCalls[1][2]).toMatchObject({
+      notificationId: NOTIF_ID,
+      channel: 'email',
+      status: 'failure',
+      statusCode: null,
+    });
+
+    // 3rd: processing→failed
+    expect(emitCalls[2][1]).toBe(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED);
+    expect(emitCalls[2][2]).toMatchObject({
+      notificationId: NOTIF_ID,
+      previousStatus: 'processing',
+      newStatus: 'failed',
+      channel: null,
+    });
+  });
+
+  it('publish failure does not throw or block the delivery pipeline', async () => {
+    const client = setupHappyPathClient();
+    mockPoolConnect.mockResolvedValueOnce(client);
+    mockDeliverEmail.mockResolvedValueOnce({ success: true, statusCode: 200 });
+
+    const publisher = makeMockPublisher();
+    publisher.emit.mockImplementation(() => {
+      throw new Error('Redis connection lost');
+    });
+
+    // processNotification should complete normally despite publish errors
+    await processNotification(makeJob(), publisher);
+
+    // Verify delivery still completed in the database
+    const deliveredCall = client.query.mock.calls[7];
+    expect(deliveredCall[0]).toContain("status = 'delivered'");
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('payload matches socketio-dashboard-contract.md format exactly', async () => {
+    const client = setupHappyPathClient();
+    mockPoolConnect.mockResolvedValueOnce(client);
+    mockDeliverEmail.mockResolvedValueOnce({ success: true, statusCode: 200 });
+    const publisher = makeMockPublisher();
+
+    await processNotification(makeJob(), publisher);
+
+    // Validate delivery.completed payload has all required fields from contract
+    const deliveryCall = publisher.emit.mock.calls.find(
+      (c: unknown[]) => c[1] === DASHBOARD_EVENTS.DELIVERY_COMPLETED,
+    );
+    expect(deliveryCall).toBeDefined();
+
+    const [emittedTenantId, emittedEvent, payload] = deliveryCall!;
+
+    // Envelope fields
+    expect(emittedTenantId).toBe(TENANT_ID);
+    expect(emittedEvent).toBe('delivery.completed');
+
+    // All DeliveryCompletedPayload fields per contract
+    expect(payload).toHaveProperty('notificationId');
+    expect(payload).toHaveProperty('recipient');
+    expect(payload).toHaveProperty('channel');
+    expect(payload).toHaveProperty('status');
+    expect(payload).toHaveProperty('statusCode');
+    expect(payload).toHaveProperty('durationMs');
+    expect(payload).toHaveProperty('attemptNumber');
+    expect(payload).toHaveProperty('routing');
+    expect(payload).toHaveProperty('priority');
+    expect(payload).toHaveProperty('timestamp');
+
+    // Routing sub-object per contract
+    expect(payload.routing).toHaveProperty('mode');
+    expect(payload.routing).toHaveProperty('exploration');
+    expect(payload.routing).toHaveProperty('modelVersion');
+
+    // Security: recipient is masked, not raw
+    expect(payload.recipient).not.toBe('user@example.com');
+    expect(payload.recipient).toContain('***');
+
+    // Validate notification.status_changed payload
+    const statusCall = publisher.emit.mock.calls.find(
+      (c: unknown[]) => c[1] === DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED && (c[2] as Record<string, unknown>).newStatus === 'delivered',
+    );
+    expect(statusCall).toBeDefined();
+    const statusPayload = statusCall![2];
+    expect(statusPayload).toHaveProperty('notificationId');
+    expect(statusPayload).toHaveProperty('previousStatus');
+    expect(statusPayload).toHaveProperty('newStatus');
+    expect(statusPayload).toHaveProperty('channel');
+    expect(statusPayload).toHaveProperty('timestamp');
   });
 });
