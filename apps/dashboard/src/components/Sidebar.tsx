@@ -5,6 +5,7 @@ const navItems = [
   { label: "Notifications", icon: "🔔", path: "/notifications" },
   { label: "Tenants",       icon: "🏢", path: "/tenants"       },
   { label: "Settings",      icon: "⚙️", path: "/settings"      },
+  { label: "Routing", icon: "🧠", path: "/routing" },
 ];
 
 export default function Sidebar() {
