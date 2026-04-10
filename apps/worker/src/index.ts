@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Worker, Queue } from 'bullmq';
 import type { Job } from 'bullmq';
 import { QUEUE_NAMES, QUEUE_CONCURRENCY } from '@notifyengine/shared';

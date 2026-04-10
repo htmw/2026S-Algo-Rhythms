@@ -1,5 +1,6 @@
 import NotificationCountRow from "../components/NotificationCountRow";
 import NotificationsTable from "../components/NotificationsTable";
+import { LiveEventFeed } from "../components/LiveEventFeed";
 
 export default function Dashboard() {
   return (
@@ -29,6 +30,10 @@ export default function Dashboard() {
       </div>
 
       <NotificationCountRow />
+
+      <div style={{ marginTop: "28px", marginBottom: "28px" }}>
+        <LiveEventFeed />
+      </div>
 
       <NotificationsTable />
     </main>
