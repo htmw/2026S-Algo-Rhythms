@@ -67,6 +67,20 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
          AND engaged IS NOT TRUE`,
       [notificationId],
     );
+    await pool.query(
+      `UPDATE recipient_channel_stats rcs
+       SET engagements_30d = rcs.engagements_30d + 1,
+           last_engaged_at = NOW(),
+           updated_at = NOW()
+       FROM delivery_attempts da
+       WHERE da.notification_id = $1
+         AND da.channel_type = rcs.channel_type
+         AND da.tenant_id = rcs.tenant_id
+         AND rcs.recipient = (
+           SELECT recipient FROM notifications WHERE id = $1
+         )`,
+      [notificationId],
+    );
 
     // UPSERT recipient_channel_stats: handles the case where the rcs row
     // doesn't exist yet (tracking pixel fires before worker creates it,
