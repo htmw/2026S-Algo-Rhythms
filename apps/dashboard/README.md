@@ -16,7 +16,7 @@ Defined in `apps/dashboard/.env` (Vite injects `VITE_`-prefixed vars at build ti
 
 | Variable | Default | Used in |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:3000` | `src/services/notificationService.ts` — API server origin |
+| `VITE_API_URL` | `http://localhost:3000` | `src/services/notificationService.ts` — API server origin |
 | `VITE_API_KEY` | (none) | `src/services/notificationService.ts` — Bearer token for API requests |
 
 `VITE_API_KEY` must contain a valid API key from the `api_keys` table. After every database wipe and reseed, the key changes — copy the new key from the seed script output into `.env` and restart the dev server.
