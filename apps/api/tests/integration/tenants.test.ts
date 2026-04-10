@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import express from 'express';
 
 // ── Hoisted mocks ──
@@ -54,6 +54,10 @@ beforeEach(async () => {
       });
     });
   }
+});
+
+afterAll(() => {
+  server?.close();
 });
 
 // ── Helpers to mock the transaction sequence ──

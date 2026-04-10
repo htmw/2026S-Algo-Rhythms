@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -79,6 +79,10 @@ beforeEach(async () => {
       });
     });
   }
+});
+
+afterAll(() => {
+  server?.close();
 });
 
 // ── Tests ──
