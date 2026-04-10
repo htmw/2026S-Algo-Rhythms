@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# apps/dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React SPA that displays notification delivery metrics and activity. It polls the API server for summary counts and recent notifications, auto-refreshing every 30 seconds. Built with Vite, React 19, TanStack React Query, and React Router.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev --workspace=@notifyengine/dashboard
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Opens on `http://localhost:5173`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Environment variables
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Defined in `apps/dashboard/.env` (Vite injects `VITE_`-prefixed vars at build time):
+
+| Variable | Default | Used in |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:3000` | `src/services/notificationService.ts` — API server origin |
+| `VITE_API_KEY` | (none) | `src/services/notificationService.ts` — Bearer token for API requests |
+
+`VITE_API_KEY` must contain a valid API key from the `api_keys` table. After every database wipe and reseed, the key changes — copy the new key from the seed script output into `.env` and restart the dev server.
+
+## Pages
+
+| Route | Component | Description |
+|---|---|---|
+| `/` | — | Redirects to `/dashboard` |
+| `/dashboard` | `Dashboard.tsx` | Summary stats cards + recent notifications table |
+| `/notifications` | `Notifications.tsx` | Notification list view |
+| `/tenants` | `Tenants.tsx` | Tenant management |
+| `/settings` | `Settings.tsx` | Settings page |
+
+## API calls
+
+All requests go through `src/services/notificationService.ts` with `Authorization: Bearer ${VITE_API_KEY}`:
+
+- `fetchNotificationSummary()` — `GET /v1/notifications/summary`
+- `fetchRecentNotifications()` — `GET /v1/notifications?limit=20`
+
+React Query is configured with a 30-second refetch interval and 20-second stale time (`src/main.tsx`).
+
+## Dependencies on other services
+
+- **API server** — the only backend the dashboard talks to (never connects to PostgreSQL, Redis, or ml-service directly)
