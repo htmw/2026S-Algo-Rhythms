@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import type { NotificationJob, NotificationPriority, RoutingMode } from '@notifyengine/shared';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { pool } from './db.js';
 import { deliverEmail } from './channels/email.js';
 import { logger } from './logger.js';
@@ -17,6 +18,8 @@ import {
   buildStaticDecision,
   type RoutingDecisionRecord,
 } from './routingDecision.js';
+import type { DashboardEventPublisher } from './dashboardEvents.js';
+import { maskEmail } from './dashboardEvents.js';
 
 interface ChannelRow {
   id: string;
@@ -45,9 +48,18 @@ function deriveRoutingMode(job: NotificationJob): RoutingMode {
   return job.routingMode ?? 'static';
 }
 
-export async function processNotification(job: Job<NotificationJob>): Promise<void> {
+export async function processNotification(job: Job<NotificationJob>, dashboardEvents?: DashboardEventPublisher): Promise<void> {
   const { notificationId, tenantId, priority } = job.data;
   const log = logger.child({ jobId: job.id, notificationId, tenantId, priority });
+
+  const emitDashboard = (event: string, payload: Record<string, unknown>): void => {
+    if (!dashboardEvents) return;
+    try {
+      dashboardEvents.emit(tenantId, event as import('@notifyengine/shared').DashboardEventName, payload);
+    } catch (err) {
+      log.error({ err, event }, 'Failed to emit dashboard event');
+    }
+  };
 
   const client = await pool.connect();
 
@@ -58,6 +70,14 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       `UPDATE notifications SET status = 'processing', updated_at = NOW() WHERE id = $1`,
       [notificationId],
     );
+
+    emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+      notificationId,
+      previousStatus: 'queued',
+      newStatus: 'processing',
+      channel: null,
+      timestamp: new Date().toISOString(),
+    });
 
     const notifResult = await client.query<NotificationRow>(
       `SELECT recipient, subject, body, body_html FROM notifications WHERE id = $1`,
@@ -98,6 +118,13 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
         `UPDATE notifications SET status = 'failed', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [notificationId],
       );
+      emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+        notificationId,
+        previousStatus: 'processing',
+        newStatus: 'failed',
+        channel: null,
+        timestamp: new Date().toISOString(),
+      });
       throw new Error('No available channels');
     }
 
@@ -234,6 +261,23 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
         ],
       );
 
+      emitDashboard(DASHBOARD_EVENTS.DELIVERY_COMPLETED, {
+        notificationId,
+        recipient: maskEmail(notification.recipient),
+        channel: channel.type,
+        status: attemptStatus,
+        statusCode,
+        durationMs,
+        attemptNumber: job.attemptsMade + 1,
+        routing: {
+          mode: routingDecision.mode,
+          exploration: routingDecision.exploration ?? false,
+          modelVersion: routingDecision.model_version ?? null,
+        },
+        priority,
+        timestamp: completedAt.toISOString(),
+      });
+
       if (success) {
         await client.query(
           `UPDATE notifications
@@ -241,6 +285,13 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
             WHERE id = $1`,
           [notificationId, channel.type],
         );
+        emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+          notificationId,
+          previousStatus: 'processing',
+          newStatus: 'delivered',
+          channel: channel.type,
+          timestamp: new Date().toISOString(),
+        });
         log.info({ channelType: channel.type, durationMs }, 'Notification delivered');
         return;
       }
@@ -255,6 +306,13 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       `UPDATE notifications SET status = 'failed', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [notificationId],
     );
+    emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+      notificationId,
+      previousStatus: 'processing',
+      newStatus: 'failed',
+      channel: null,
+      timestamp: new Date().toISOString(),
+    });
     log.error('All channels exhausted');
     throw new Error('All channels exhausted');
   } finally {
