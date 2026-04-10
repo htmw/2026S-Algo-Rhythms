@@ -132,4 +132,29 @@ jobs:
           pytest || test $? -eq 5
         working-directory: apps/ml-service
 
-  # E2E tests require Docker Compose infrastructure - deferred to Sprint 3
+  e2e-tests:
+    name: E2E Tests (Docker Compose)
+    runs-on: ubuntu-latest
+    needs: [node-tests, python-tests]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate .env from .env.example
+        run: cp .env.example .env
+
+      - name: Validate Docker Compose config
+        run: docker compose config --quiet
+
+      - name: Start infrastructure
+        run: docker compose up -d --wait
+
+      - name: Verify services are healthy
+        run: |
+          docker compose exec -T postgres pg_isready -U notify -d notifyengine
+          docker compose exec -T redis redis-cli ping
+          curl --fail --retry 10 --retry-delay 2 --retry-all-errors http://localhost:8000/health
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
