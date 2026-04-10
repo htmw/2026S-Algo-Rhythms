@@ -27,9 +27,9 @@ Defined in `apps/dashboard/.env` (Vite injects `VITE_`-prefixed vars at build ti
 |---|---|---|
 | `/` | — | Redirects to `/dashboard` |
 | `/dashboard` | `Dashboard.tsx` | Summary stats cards + recent notifications table |
-| `/notifications` | `Notifications.tsx` | Notification list view |
-| `/tenants` | `Tenants.tsx` | Tenant management |
-| `/settings` | `Settings.tsx` | Settings page |
+| `/notifications` | `Notifications.tsx` | Placeholder — not yet implemented (planned for Sprint 2) |
+| `/tenants` | `Tenants.tsx` | Placeholder — not yet implemented (planned for Sprint 2) |
+| `/settings` | `Settings.tsx` | Placeholder — not yet implemented (planned for Sprint 3) |
 
 ## API calls
 

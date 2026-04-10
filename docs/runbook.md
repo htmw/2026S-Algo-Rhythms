@@ -156,8 +156,10 @@ The worker automatically triggers `POST /train` every 6 hours via a repeatable B
 
 ### Seed synthetic training data
 
+`synthetic.py` takes no CLI arguments. It connects to PostgreSQL via `DATABASE_URL`, generates 10 000 labeled delivery attempts with realistic feature vectors, and writes them directly to the database.
+
 ```bash
-docker compose exec ml-service python -m synthetic --output data/training.csv --users 50 --notifications 200
+docker compose exec ml-service python -m synthetic
 ```
 
 ---

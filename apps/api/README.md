@@ -20,11 +20,11 @@ Read from `process.env` across the codebase:
 
 | Variable | Default | Used in |
 |---|---|---|
-| `DATABASE_URL` | `postgresql://notify:notify@localhost:5432/notifyengine` | `src/db.ts` — PostgreSQL connection pool |
+| `DATABASE_URL` | (none — set via `.env`) | `src/db.ts` — PostgreSQL connection pool. `.env.example` suggests `postgresql://notify:notify@localhost:5432/notifyengine` |
 | `REDIS_URL` | `redis://localhost:6379` | `src/queue.ts`, `src/index.ts` — BullMQ queues and general Redis |
 | `REDIS_PUBSUB_URL` | falls back to `REDIS_URL` | `src/index.ts` — isolated subscriber for dashboard bridge |
 | `PORT` | `3000` | `src/index.ts` — Express listen port |
-| `NODE_ENV` | `development` | `src/logger.ts` — controls Pino transport (pretty in dev) |
+| `NODE_ENV` | (none) | `src/logger.ts` — when not `'production'`, uses `pino/file` transport to stdout (raw JSON, not pretty-printed). `src/routes/tenants.ts` — determines API key prefix (`ne_live_` in production, `ne_test_` otherwise) |
 | `DASHBOARD_URL` | `http://localhost:5173` | `src/index.ts` — CORS origin for Express and Socket.IO |
 | `LOG_LEVEL` | `info` | `src/logger.ts` — Pino log level |
 

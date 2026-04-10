@@ -13,7 +13,7 @@ From `src/types.ts`:
 | `ApiError` | interface | Standard error envelope: code, message, optional retry_after_ms |
 | `NotificationPriority` | type | `'critical' \| 'high' \| 'standard' \| 'bulk'` |
 | `RoutingMode` | type | `'adaptive' \| 'static' \| 'forced'` |
-| `NotificationStatus` | type | `'accepted' \| 'queued' \| 'processing' \| 'delivered' \| 'failed' \| 'dlq'` |
+| `NotificationStatus` | type | `'pending' \| 'queued' \| 'processing' \| 'delivered' \| 'failed' \| 'dlq'` |
 | `DeliveryChannel` | type | `'email' \| 'sms_webhook' \| 'websocket' \| 'webhook'` |
 
 From `src/constants.ts`:
