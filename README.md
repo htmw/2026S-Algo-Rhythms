@@ -50,6 +50,14 @@ export $(grep -v '^#' .env | grep -v '^$' | xargs) && npx tsx infra/seed/devSeed
 
 Save the API keys printed to the console. They are shown once and never stored.
 
+## Quick Demo
+
+Run the interactive demo script to see the full pipeline end-to-end. It handles all setup automatically (dependencies, environment, Docker, migrations, seeding) and walks through every Sprint 1 feature step by step.
+
+```bash
+bash scripts/demo.sh
+```
+
 ## Running Services
 
 Open a separate terminal for each:
