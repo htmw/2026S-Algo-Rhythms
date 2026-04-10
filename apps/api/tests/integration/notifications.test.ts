@@ -335,3 +335,79 @@ describe('GET /v1/notifications', () => {
     expect(body.error.code).toBe('VALIDATION_ERROR');
   });
 });
+
+describe('GET /v1/notifications/summary', () => {
+  it('returns correct shape with aggregated counts', async () => {
+    mockDbClient.query.mockResolvedValueOnce({
+      rows: [{
+        total: 150,
+        delivered: 120,
+        failed: 10,
+        queued: 15,
+        processing: 5,
+      }],
+    });
+
+    const res = await get('/v1/notifications/summary');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.total).toBe(150);
+    expect(body.delivered).toBe(120);
+    expect(body.failed).toBe(10);
+    expect(body.queued).toBe(15);
+    expect(body.processing).toBe(5);
+    expect(body.request_id).toBeDefined();
+  });
+
+  it('returns zeros when no notifications exist', async () => {
+    mockDbClient.query.mockResolvedValueOnce({
+      rows: [{ total: 0, delivered: 0, failed: 0, queued: 0, processing: 0 }],
+    });
+
+    const res = await get('/v1/notifications/summary');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.total).toBe(0);
+  });
+});
+
+describe('POST /v1/notifications (idempotency)', () => {
+  it('duplicate request with same Idempotency-Key returns existing notification', async () => {
+    const notifId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+    // Idempotency lookup returns existing notification
+    mockDbClient.query.mockResolvedValueOnce({
+      rows: [{
+        id: notifId,
+        status: 'queued',
+        priority: 'standard',
+        routing_mode: 'adaptive',
+        created_at: '2026-04-01T12:00:00.000Z',
+      }],
+    });
+
+    const res = await fetch(`http://127.0.0.1:${serverPort}/v1/notifications`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'idem-key-123',
+      },
+      body: JSON.stringify({
+        recipient: 'user@example.com',
+        body: 'Duplicate request',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe(notifId);
+    expect(body.status).toBe('queued');
+    expect(body.status_url).toBe(`/v1/notifications/${notifId}`);
+    expect(body.request_id).toBeDefined();
+
+    // Should NOT have enqueued a new job
+    expect(mockQueueAdd).not.toHaveBeenCalled();
+  });
+});

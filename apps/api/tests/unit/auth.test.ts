@@ -172,4 +172,47 @@ describe('authMiddleware', () => {
     expect(typeof body.request_id).toBe('string');
     expect(body.request_id.length).toBeGreaterThan(0);
   });
+
+  it('returns 401 INVALID_API_KEY when key is expired', async () => {
+    // The SQL query filters: expires_at IS NULL OR expires_at > NOW()
+    // An expired key returns no rows from the query, triggering INVALID_API_KEY.
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    const req = makeReq({ authorization: 'Bearer ne_test_expiredkey123' });
+    const res = makeRes();
+
+    await authMiddleware(req, res, next);
+
+    expect(res._status).toBe(401);
+    expect((res._body as { error: { code: string } }).error.code).toBe('INVALID_API_KEY');
+    expect(next).not.toHaveBeenCalled();
+
+    // Verify the query was called with the SHA-256 hash of the key
+    const hash = hashKey('ne_test_expiredkey123');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('expires_at'),
+      [hash],
+    );
+  });
+
+  it('returns 401 INVALID_API_KEY when key is revoked', async () => {
+    // The SQL query filters: revoked_at IS NULL
+    // A revoked key returns no rows from the query, triggering INVALID_API_KEY.
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    const req = makeReq({ authorization: 'Bearer ne_test_revokedkey456' });
+    const res = makeRes();
+
+    await authMiddleware(req, res, next);
+
+    expect(res._status).toBe(401);
+    expect((res._body as { error: { code: string } }).error.code).toBe('INVALID_API_KEY');
+    expect(next).not.toHaveBeenCalled();
+
+    // Verify the query includes revoked_at filter
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('revoked_at IS NULL'),
+      expect.any(Array),
+    );
+  });
 });

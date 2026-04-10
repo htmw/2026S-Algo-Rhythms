@@ -93,4 +93,32 @@ describe('predictChannel', () => {
     const result = await predictChannel(request, { baseUrl: 'http://ml-test:8000' });
     expect(result).toBeNull();
   });
+
+  it('returns null when AbortController timeout fires', async () => {
+    // Simulate a response that takes longer than the timeout.
+    // Use a short timeout (50ms) and a fetch that resolves after 200ms.
+    const fetchMock = vi.fn().mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response(JSON.stringify({ selected: 'email' }), { status: 200 })),
+            200,
+          );
+          // If aborted before resolve, reject with AbortError
+          init.signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await predictChannel(request, {
+      baseUrl: 'http://ml-test:8000',
+      timeoutMs: 50,
+    });
+
+    expect(result).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
