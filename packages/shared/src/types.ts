@@ -27,7 +27,7 @@ export type NotificationPriority = 'critical' | 'high' | 'standard' | 'bulk';
 export type RoutingMode = 'adaptive' | 'static' | 'forced';
 
 export type NotificationStatus =
-  | 'accepted'
+  | 'pending'
   | 'queued'
   | 'processing'
   | 'delivered'
