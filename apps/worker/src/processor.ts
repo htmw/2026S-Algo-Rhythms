@@ -48,14 +48,21 @@ function deriveRoutingMode(job: NotificationJob): RoutingMode {
   return job.routingMode ?? 'static';
 }
 
-export async function processNotification(job: Job<NotificationJob>, dashboardEvents?: DashboardEventPublisher): Promise<void> {
+export async function processNotification(
+  job: Job<NotificationJob>,
+  dashboardEvents?: DashboardEventPublisher,
+): Promise<void> {
   const { notificationId, tenantId, priority } = job.data;
   const log = logger.child({ jobId: job.id, notificationId, tenantId, priority });
 
   const emitDashboard = (event: string, payload: Record<string, unknown>): void => {
     if (!dashboardEvents) return;
     try {
-      dashboardEvents.emit(tenantId, event as import('@notifyengine/shared').DashboardEventName, payload);
+      dashboardEvents.emit(
+        tenantId,
+        event as import('@notifyengine/shared').DashboardEventName,
+        payload,
+      );
     } catch (err) {
       log.error({ err, event }, 'Failed to emit dashboard event');
     }
@@ -89,7 +96,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       throw new Error(`Notification ${notificationId} not found`);
     }
 
-    // ── Fetch eligible channels ──
     const routingMode = deriveRoutingMode(job.data);
 
     let channelsResult;
@@ -128,7 +134,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       throw new Error('No available channels');
     }
 
-    // ── Fetch recipient stats for feature extraction ──
     const statsResult = await client.query<StatsRow>(
       `SELECT channel_type, attempts_30d, successes_30d, engagements_30d,
               avg_latency_ms, last_success_at, last_engaged_at,
@@ -142,7 +147,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       statsByChannel.set(row.channel_type, row);
     }
 
-    // ── Build feature vectors per channel ──
     const featuresByChannel = new Map<string, FeatureVector>();
     for (const channel of eligibleChannels) {
       featuresByChannel.set(
@@ -157,7 +161,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       );
     }
 
-    // ── Routing decision ──
     let orderedChannels = eligibleChannels;
     let routingDecision: RoutingDecisionRecord;
 
@@ -176,7 +179,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       }
       routingDecision = buildStaticDecision(orderedChannels[0].type);
     } else {
-      // adaptive
       const featuresPerChannel: Record<string, FeatureVector> = {};
       for (const [k, v] of featuresByChannel.entries()) {
         featuresPerChannel[k] = v;
@@ -203,13 +205,11 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       }
     }
 
-    // Persist routing_decision on the notification record
     await client.query(
       `UPDATE notifications SET routing_decision = $2::jsonb, updated_at = NOW() WHERE id = $1`,
       [notificationId, JSON.stringify(routingDecision)],
     );
 
-    // ── Try each channel in order ──
     for (const channel of orderedChannels) {
       const startedAt = new Date();
       let success = false;
@@ -239,7 +239,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       const attemptStatus = success ? 'success' : 'failure';
       const featureVector = featuresByChannel.get(channel.type) ?? null;
 
-      // ── Atomic: delivery_attempt + recipient_channel_stats ──
       try {
         await client.query('BEGIN');
 
@@ -267,25 +266,46 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
 
         await client.query(
           `INSERT INTO recipient_channel_stats (
-             tenant_id, recipient, channel_type,
-             attempts_30d, successes_30d, engagements_30d,
+             tenant_id,
+             recipient,
+             channel_type,
+             attempts_30d,
+             successes_30d,
+             engagements_30d,
              avg_latency_ms,
-             last_success_at, last_failure_at,
-             notifications_received_24h, notifications_received_7d,
+             last_success_at,
+             last_failure_at,
+             notifications_received_24h,
+             notifications_received_7d,
              updated_at
-           ) VALUES ($1, $2, $3, 1, $4, 0, $5,
+           )
+           VALUES (
+             $1,
+             $2,
+             $3,
+             1,
+             $4,
+             0,
+             CASE WHEN $4 = 1 THEN $5 ELSE NULL END,
              CASE WHEN $4 = 1 THEN NOW() ELSE NULL END,
              CASE WHEN $4 = 0 THEN NOW() ELSE NULL END,
-             1, 1, NOW()
+             1,
+             1,
+             NOW()
            )
            ON CONFLICT (tenant_id, recipient, channel_type)
            DO UPDATE SET
              attempts_30d = recipient_channel_stats.attempts_30d + 1,
              successes_30d = recipient_channel_stats.successes_30d + $4,
              avg_latency_ms = CASE
-               WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5
-               ELSE (recipient_channel_stats.avg_latency_ms * recipient_channel_stats.attempts_30d + $5)
-                    / (recipient_channel_stats.attempts_30d + 1)
+               WHEN $4 = 1 THEN
+                 CASE
+                   WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5
+                   ELSE (
+                     recipient_channel_stats.avg_latency_ms * recipient_channel_stats.successes_30d + $5
+                   ) / (recipient_channel_stats.successes_30d + 1)
+                 END
+               ELSE recipient_channel_stats.avg_latency_ms
              END,
              last_success_at = CASE
                WHEN $4 = 1 THEN NOW()
@@ -329,68 +349,6 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
         priority,
         timestamp: completedAt.toISOString(),
       });
-
-      await client.query(
-        `INSERT INTO recipient_channel_stats (
-           tenant_id,
-           recipient,
-           channel_type,
-           attempts_30d,
-           successes_30d,
-           engagements_30d,
-           avg_latency_ms,
-           last_success_at,
-           last_failure_at,
-           notifications_received_24h,
-           notifications_received_7d,
-           updated_at
-         )
-         VALUES (
-           $1,
-           $2,
-           $3,
-           1,
-           $4,
-           0,
-           $5,
-           CASE WHEN $4 = 1 THEN NOW() ELSE NULL END,
-           CASE WHEN $4 = 0 THEN NOW() ELSE NULL END,
-           1,
-           1,
-           NOW()
-         )
-         ON CONFLICT (tenant_id, recipient, channel_type)
-         DO UPDATE SET
-           attempts_30d = recipient_channel_stats.attempts_30d + 1,
-           successes_30d = recipient_channel_stats.successes_30d + $4,
-           avg_latency_ms =
-             CASE
-               WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5
-               ELSE (
-                 (recipient_channel_stats.avg_latency_ms * recipient_channel_stats.attempts_30d) + $5
-               ) / (recipient_channel_stats.attempts_30d + 1)
-             END,
-           last_success_at =
-             CASE
-               WHEN $4 = 1 THEN NOW()
-               ELSE recipient_channel_stats.last_success_at
-             END,
-           last_failure_at =
-             CASE
-               WHEN $4 = 0 THEN NOW()
-               ELSE recipient_channel_stats.last_failure_at
-             END,
-           notifications_received_24h = recipient_channel_stats.notifications_received_24h + 1,
-           notifications_received_7d = recipient_channel_stats.notifications_received_7d + 1,
-           updated_at = NOW()`,
-        [
-          tenantId,
-          notification.recipient,
-          channel.type,
-          success ? 1 : 0,
-          durationMs,
-        ],
-      );
 
       if (success) {
         await client.query(
