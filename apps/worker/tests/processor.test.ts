@@ -123,13 +123,17 @@ function setupHappyPathClient() {
   pushResult([]);
   // 5: UPDATE routing_decision
   pushResult([]);
-  // 6: INSERT delivery_attempt
+  // 6: BEGIN
   pushResult([]);
-  // 7: UPSERT recipient_channel_stats
+  // 7: INSERT delivery_attempt
   pushResult([]);
-  // 8: UPDATE status=delivered
+  // 8: UPSERT recipient_channel_stats
   pushResult([]);
-  // 9: (finally) set_config reset
+  // 9: COMMIT
+  pushResult([]);
+  // 10: UPDATE status=delivered
+  pushResult([]);
+  // 11: (finally) set_config reset
   pushResult([]);
 
   return client;
@@ -171,8 +175,11 @@ describe('processNotification', () => {
       null,
     );
 
-    // Verify delivery_attempt was inserted (call 6)
-    const insertCall = client.query.mock.calls[6];
+    // Verify BEGIN (call 6)
+    expect(client.query.mock.calls[6][0]).toBe('BEGIN');
+
+    // Verify delivery_attempt was inserted (call 7)
+    const insertCall = client.query.mock.calls[7];
     expect(insertCall[0]).toContain('INSERT INTO delivery_attempts');
     const insertParams = insertCall[1];
     expect(insertParams[0]).toBe(TENANT_ID);          // tenant_id
@@ -181,13 +188,16 @@ describe('processNotification', () => {
     expect(insertParams[3]).toBe('email');              // channel_type
     expect(insertParams[5]).toBe('success');            // status
 
-    // Verify recipient_channel_stats UPSERT (call 7)
-    const upsertCall = client.query.mock.calls[7];
+    // Verify recipient_channel_stats UPSERT (call 8)
+    const upsertCall = client.query.mock.calls[8];
     expect(upsertCall[0]).toContain('INSERT INTO recipient_channel_stats');
     expect(upsertCall[0]).toContain('ON CONFLICT');
 
-    // Verify notification status updated to delivered (call 8)
-    const deliveredCall = client.query.mock.calls[8];
+    // Verify COMMIT (call 9)
+    expect(client.query.mock.calls[9][0]).toBe('COMMIT');
+
+    // Verify notification status updated to delivered (call 10)
+    const deliveredCall = client.query.mock.calls[10];
     expect(deliveredCall[0]).toContain("status = 'delivered'");
     expect(deliveredCall[1][1]).toBe('email');          // delivered_via
 
@@ -222,13 +232,17 @@ describe('processNotification', () => {
     pushResult([]);
     // 5: UPDATE routing_decision
     pushResult([]);
-    // 6: INSERT delivery_attempt (failure)
+    // 6: BEGIN
     pushResult([]);
-    // 7: UPSERT recipient_channel_stats
+    // 7: INSERT delivery_attempt (failure)
     pushResult([]);
-    // 8: UPDATE status=failed
+    // 8: UPSERT recipient_channel_stats
     pushResult([]);
-    // 9: set_config reset
+    // 9: COMMIT
+    pushResult([]);
+    // 10: UPDATE status=failed
+    pushResult([]);
+    // 11: set_config reset
     pushResult([]);
 
     mockPoolConnect.mockResolvedValueOnce(client);
@@ -236,17 +250,23 @@ describe('processNotification', () => {
 
     await expect(processNotification(makeJob())).rejects.toThrow('All channels exhausted');
 
-    // Verify delivery attempt was recorded as failure
-    const insertCall = client.query.mock.calls[6];
+    // Verify BEGIN (call 6)
+    expect(client.query.mock.calls[6][0]).toBe('BEGIN');
+
+    // Verify delivery attempt was recorded as failure (call 7)
+    const insertCall = client.query.mock.calls[7];
     expect(insertCall[0]).toContain('INSERT INTO delivery_attempts');
     expect(insertCall[1][5]).toBe('failure');           // status
     expect(insertCall[1][7]).toBe('SMTP timeout');      // error_message
 
-    // Verify recipient_channel_stats UPSERT (call 7)
-    expect(client.query.mock.calls[7][0]).toContain('INSERT INTO recipient_channel_stats');
+    // Verify recipient_channel_stats UPSERT (call 8)
+    expect(client.query.mock.calls[8][0]).toContain('INSERT INTO recipient_channel_stats');
 
-    // Verify notification status set to failed (call 8)
-    const failedCall = client.query.mock.calls[8];
+    // Verify COMMIT (call 9)
+    expect(client.query.mock.calls[9][0]).toBe('COMMIT');
+
+    // Verify notification status set to failed (call 10)
+    const failedCall = client.query.mock.calls[10];
     expect(failedCall[0]).toContain("status = 'failed'");
 
     expect(client.release).toHaveBeenCalled();
@@ -351,13 +371,17 @@ describe('processNotification', () => {
     pushResult([]);
     // 5: UPDATE routing_decision
     pushResult([]);
-    // 6: INSERT delivery_attempt
+    // 6: BEGIN
     pushResult([]);
-    // 7: UPSERT recipient_channel_stats
+    // 7: INSERT delivery_attempt
     pushResult([]);
-    // 8: UPDATE status=delivered
+    // 8: UPSERT recipient_channel_stats
     pushResult([]);
-    // 9: set_config reset
+    // 9: COMMIT
+    pushResult([]);
+    // 10: UPDATE status=delivered
+    pushResult([]);
+    // 11: set_config reset
     pushResult([]);
 
     mockPoolConnect.mockResolvedValueOnce(client);
@@ -409,13 +433,17 @@ describe('processNotification', () => {
     pushResult([]);
     // 5: UPDATE routing_decision
     pushResult([]);
-    // 6: INSERT delivery_attempt
+    // 6: BEGIN
     pushResult([]);
-    // 7: UPSERT recipient_channel_stats
+    // 7: INSERT delivery_attempt
     pushResult([]);
-    // 8: UPDATE status=delivered
+    // 8: UPSERT recipient_channel_stats
     pushResult([]);
-    // 9: set_config reset
+    // 9: COMMIT
+    pushResult([]);
+    // 10: UPDATE status=delivered
+    pushResult([]);
+    // 11: set_config reset
     pushResult([]);
 
     mockPoolConnect.mockResolvedValueOnce(client);
@@ -517,8 +545,10 @@ describe('processNotification — dashboard events', () => {
     }]);
     pushResult([]); // SELECT stats
     pushResult([]); // UPDATE routing_decision
+    pushResult([]); // BEGIN
     pushResult([]); // INSERT delivery_attempt
     pushResult([]); // UPSERT recipient_channel_stats
+    pushResult([]); // COMMIT
     pushResult([]); // UPDATE status=failed
     pushResult([]); // set_config reset
 
@@ -566,8 +596,8 @@ describe('processNotification — dashboard events', () => {
     // processNotification should complete normally despite publish errors
     await processNotification(makeJob(), publisher);
 
-    // Verify delivery still completed in the database (call 8: after UPSERT at call 7)
-    const deliveredCall = client.query.mock.calls[8];
+    // Verify delivery still completed in the database (call 10: after BEGIN/INSERT/UPSERT/COMMIT)
+    const deliveredCall = client.query.mock.calls[10];
     expect(deliveredCall[0]).toContain("status = 'delivered'");
     expect(client.release).toHaveBeenCalled();
   });
