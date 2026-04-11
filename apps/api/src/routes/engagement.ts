@@ -40,6 +40,22 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
       [notificationId],
     );
 
+    // Update recipient_channel_stats for engagement
+    await pool.query(
+      `UPDATE recipient_channel_stats rcs
+       SET engagements_30d = rcs.engagements_30d + 1,
+           last_engaged_at = NOW(),
+           updated_at = NOW()
+       FROM delivery_attempts da
+       JOIN notifications n ON n.id = da.notification_id
+       WHERE da.notification_id = $1
+         AND da.status = 'success'
+         AND rcs.tenant_id = da.tenant_id
+         AND rcs.recipient = n.recipient
+         AND rcs.channel_type = da.channel_type`,
+      [notificationId],
+    );
+
     logger.info({ requestId, notificationId }, 'Email open tracked');
   } catch (err) {
     logger.error({ err, requestId, notificationId }, 'Failed to track email open');
