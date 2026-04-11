@@ -50,6 +50,14 @@ export $(grep -v '^#' .env | grep -v '^$' | xargs) && npx tsx infra/seed/devSeed
 
 Save the API keys printed to the console. They are shown once and never stored.
 
+## Quick Demo
+
+Run the interactive demo script to see the full pipeline end-to-end. It handles all setup automatically (dependencies, environment, Docker, migrations, seeding) and walks through every Sprint 1 feature step by step.
+
+```bash
+bash scripts/demo.sh
+```
+
 ## Running Services
 
 Open a separate terminal for each:
@@ -68,7 +76,7 @@ export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run dev --workspace=@n
 
 Create `apps/dashboard/.env` with an API key from tenant registration or the seed output:
 ```
-VITE_API_BASE_URL=http://localhost:3000
+VITE_API_URL=http://localhost:3000
 VITE_API_KEY=ne_test_your_key_here
 ```
 Then start:

@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import type { NotificationJob, NotificationPriority, RoutingMode } from '@notifyengine/shared';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { pool } from './db.js';
 import { deliverEmail } from './channels/email.js';
 import { logger } from './logger.js';
@@ -17,6 +18,8 @@ import {
   buildStaticDecision,
   type RoutingDecisionRecord,
 } from './routingDecision.js';
+import type { DashboardEventPublisher } from './dashboardEvents.js';
+import { maskEmail } from './dashboardEvents.js';
 
 interface ChannelRow {
   id: string;
@@ -45,9 +48,18 @@ function deriveRoutingMode(job: NotificationJob): RoutingMode {
   return job.routingMode ?? 'static';
 }
 
-export async function processNotification(job: Job<NotificationJob>): Promise<void> {
+export async function processNotification(job: Job<NotificationJob>, dashboardEvents?: DashboardEventPublisher): Promise<void> {
   const { notificationId, tenantId, priority } = job.data;
   const log = logger.child({ jobId: job.id, notificationId, tenantId, priority });
+
+  const emitDashboard = (event: string, payload: Record<string, unknown>): void => {
+    if (!dashboardEvents) return;
+    try {
+      dashboardEvents.emit(tenantId, event as import('@notifyengine/shared').DashboardEventName, payload);
+    } catch (err) {
+      log.error({ err, event }, 'Failed to emit dashboard event');
+    }
+  };
 
   const client = await pool.connect();
 
@@ -58,6 +70,14 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       `UPDATE notifications SET status = 'processing', updated_at = NOW() WHERE id = $1`,
       [notificationId],
     );
+
+    emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+      notificationId,
+      previousStatus: 'queued',
+      newStatus: 'processing',
+      channel: null,
+      timestamp: new Date().toISOString(),
+    });
 
     const notifResult = await client.query<NotificationRow>(
       `SELECT recipient, subject, body, body_html FROM notifications WHERE id = $1`,
@@ -98,6 +118,13 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
         `UPDATE notifications SET status = 'failed', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [notificationId],
       );
+      emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+        notificationId,
+        previousStatus: 'processing',
+        newStatus: 'failed',
+        channel: null,
+        timestamp: new Date().toISOString(),
+      });
       throw new Error('No available channels');
     }
 
@@ -212,27 +239,96 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       const attemptStatus = success ? 'success' : 'failure';
       const featureVector = featuresByChannel.get(channel.type) ?? null;
 
-      await client.query(
-        `INSERT INTO delivery_attempts (
-           tenant_id, notification_id, channel_id, channel_type,
-           attempt_number, status, status_code, error_message,
-           started_at, completed_at, duration_ms, feature_vector
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
-        [
-          tenantId,
-          notificationId,
-          channel.id,
-          channel.type,
-          job.attemptsMade + 1,
-          attemptStatus,
-          statusCode,
-          errorMessage,
-          startedAt,
-          completedAt,
-          durationMs,
-          featureVector ? JSON.stringify(featureVector) : null,
-        ],
-      );
+      // ── Atomic: delivery_attempt + recipient_channel_stats ──
+      try {
+        await client.query('BEGIN');
+
+        await client.query(
+          `INSERT INTO delivery_attempts (
+             tenant_id, notification_id, channel_id, channel_type,
+             attempt_number, status, status_code, error_message,
+             started_at, completed_at, duration_ms, feature_vector
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
+          [
+            tenantId,
+            notificationId,
+            channel.id,
+            channel.type,
+            job.attemptsMade + 1,
+            attemptStatus,
+            statusCode,
+            errorMessage,
+            startedAt,
+            completedAt,
+            durationMs,
+            featureVector ? JSON.stringify(featureVector) : null,
+          ],
+        );
+
+        await client.query(
+          `INSERT INTO recipient_channel_stats (
+             tenant_id, recipient, channel_type,
+             attempts_30d, successes_30d, engagements_30d,
+             avg_latency_ms,
+             last_success_at, last_failure_at,
+             notifications_received_24h, notifications_received_7d,
+             updated_at
+           ) VALUES ($1, $2, $3, 1, $4, 0, $5,
+             CASE WHEN $4 = 1 THEN NOW() ELSE NULL END,
+             CASE WHEN $4 = 0 THEN NOW() ELSE NULL END,
+             1, 1, NOW()
+           )
+           ON CONFLICT (tenant_id, recipient, channel_type)
+           DO UPDATE SET
+             attempts_30d = recipient_channel_stats.attempts_30d + 1,
+             successes_30d = recipient_channel_stats.successes_30d + $4,
+             avg_latency_ms = CASE
+               WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5
+               ELSE (recipient_channel_stats.avg_latency_ms * recipient_channel_stats.attempts_30d + $5)
+                    / (recipient_channel_stats.attempts_30d + 1)
+             END,
+             last_success_at = CASE
+               WHEN $4 = 1 THEN NOW()
+               ELSE recipient_channel_stats.last_success_at
+             END,
+             last_failure_at = CASE
+               WHEN $4 = 0 THEN NOW()
+               ELSE recipient_channel_stats.last_failure_at
+             END,
+             notifications_received_24h = recipient_channel_stats.notifications_received_24h + 1,
+             notifications_received_7d = recipient_channel_stats.notifications_received_7d + 1,
+             updated_at = NOW()`,
+          [
+            tenantId,
+            notification.recipient,
+            channel.type,
+            success ? 1 : 0,
+            durationMs,
+          ],
+        );
+
+        await client.query('COMMIT');
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      }
+
+      emitDashboard(DASHBOARD_EVENTS.DELIVERY_COMPLETED, {
+        notificationId,
+        recipient: maskEmail(notification.recipient),
+        channel: channel.type,
+        status: attemptStatus,
+        statusCode,
+        durationMs,
+        attemptNumber: job.attemptsMade + 1,
+        routing: {
+          mode: routingDecision.mode,
+          exploration: routingDecision.exploration ?? false,
+          modelVersion: routingDecision.model_version ?? null,
+        },
+        priority,
+        timestamp: completedAt.toISOString(),
+      });
 
       if (success) {
         await client.query(
@@ -241,6 +337,13 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
             WHERE id = $1`,
           [notificationId, channel.type],
         );
+        emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+          notificationId,
+          previousStatus: 'processing',
+          newStatus: 'delivered',
+          channel: channel.type,
+          timestamp: new Date().toISOString(),
+        });
         log.info({ channelType: channel.type, durationMs }, 'Notification delivered');
         return;
       }
@@ -255,6 +358,13 @@ export async function processNotification(job: Job<NotificationJob>): Promise<vo
       `UPDATE notifications SET status = 'failed', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [notificationId],
     );
+    emitDashboard(DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+      notificationId,
+      previousStatus: 'processing',
+      newStatus: 'failed',
+      channel: null,
+      timestamp: new Date().toISOString(),
+    });
     log.error('All channels exhausted');
     throw new Error('All channels exhausted');
   } finally {

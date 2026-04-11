@@ -1,15 +1,21 @@
+import 'dotenv/config';
 import { Worker, Queue } from 'bullmq';
 import type { Job } from 'bullmq';
-import { QUEUE_NAMES, QUEUE_CONCURRENCY } from '@notifyengine/shared';
+import { QUEUE_NAMES, QUEUE_CONCURRENCY, DASHBOARD_EVENTS } from '@notifyengine/shared';
 import type { NotificationJob } from '@notifyengine/shared';
 import { processNotification } from './processor.js';
 import { pool } from './db.js';
 import { logger } from './logger.js';
 import { setupRetrainScheduler } from './retrainScheduler.js';
+import { createDashboardEventPublisher } from './dashboardEvents.js';
+
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
 const connection = {
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  url: redisUrl,
 };
+
+const dashboardEvents = createDashboardEventPublisher(redisUrl);
 
 const dlqQueue = new Queue(QUEUE_NAMES.DLQ, { connection });
 
@@ -27,7 +33,7 @@ const queueConfigs = [
 const workers = queueConfigs.map(({ name, concurrency }) => {
   const worker = new Worker<NotificationJob>(
     name,
-    async (job) => processNotification(job),
+    async (job) => processNotification(job, dashboardEvents),
     { connection, concurrency },
   );
 
@@ -63,6 +69,26 @@ const workers = queueConfigs.map(({ name, concurrency }) => {
           await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
           client.release();
         }
+
+        try {
+          dashboardEvents.emit(job.data.tenantId, DASHBOARD_EVENTS.NOTIFICATION_STATUS_CHANGED, {
+            notificationId: job.data.notificationId,
+            previousStatus: 'failed',
+            newStatus: 'dlq',
+            channel: null,
+            timestamp: new Date().toISOString(),
+          });
+          dashboardEvents.emit(job.data.tenantId, DASHBOARD_EVENTS.DLQ_ENTRY_ADDED, {
+            notificationId: job.data.notificationId,
+            recipient: job.data.recipient.substring(0, 2) + '***',
+            lastChannel: job.data.forceChannel ?? 'email',
+            lastError: err.message,
+            totalAttempts: job.attemptsMade,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (pubErr) {
+          logger.error({ err: pubErr, notificationId: job.data.notificationId }, 'Failed to publish DLQ dashboard event');
+        }
       } catch (dlqErr) {
         logger.error({ err: dlqErr, jobId: job.id }, 'Failed to move job to DLQ');
       }
@@ -82,6 +108,7 @@ async function shutdown(): Promise<void> {
   await Promise.all(workers.map((w) => w.close()));
   await retrainScheduler.close();
   await dlqQueue.close();
+  await dashboardEvents.close();
   await pool.end();
   logger.info('All workers stopped');
   process.exit(0);

@@ -1,5 +1,6 @@
 import NotificationCountRow from "../components/NotificationCountRow";
 import NotificationsTable from "../components/NotificationsTable";
+import { LiveEventFeed } from "../components/LiveEventFeed";
 
 export default function Dashboard() {
   return (
@@ -24,11 +25,15 @@ export default function Dashboard() {
           marginTop: "4px",
           margin: "4px 0 0 0",
         }}>
-          Sprint 1 · Auto-refreshes every 30 seconds
+          Sprint 1 · Live updates via Socket.IO
         </p>
       </div>
 
       <NotificationCountRow />
+
+      <div style={{ marginTop: "28px", marginBottom: "28px" }}>
+        <LiveEventFeed />
+      </div>
 
       <NotificationsTable />
     </main>
