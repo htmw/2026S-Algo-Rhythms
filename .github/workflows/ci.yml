@@ -132,8 +132,8 @@ jobs:
           pytest || test $? -eq 5
         working-directory: apps/ml-service
 
-  e2e-tests:
-    name: E2E Tests (Docker Compose)
+  infra-smoke-test:
+    name: Infrastructure Smoke Test (Docker Compose)
     runs-on: ubuntu-latest
     needs: [node-tests, python-tests]
     steps:
