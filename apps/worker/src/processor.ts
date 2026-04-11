@@ -239,27 +239,79 @@ export async function processNotification(job: Job<NotificationJob>, dashboardEv
       const attemptStatus = success ? 'success' : 'failure';
       const featureVector = featuresByChannel.get(channel.type) ?? null;
 
-      await client.query(
-        `INSERT INTO delivery_attempts (
-           tenant_id, notification_id, channel_id, channel_type,
-           attempt_number, status, status_code, error_message,
-           started_at, completed_at, duration_ms, feature_vector
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
-        [
-          tenantId,
-          notificationId,
-          channel.id,
-          channel.type,
-          job.attemptsMade + 1,
-          attemptStatus,
-          statusCode,
-          errorMessage,
-          startedAt,
-          completedAt,
-          durationMs,
-          featureVector ? JSON.stringify(featureVector) : null,
-        ],
-      );
+      // ── Atomic: delivery_attempt + recipient_channel_stats ──
+      try {
+        await client.query('BEGIN');
+
+        await client.query(
+          `INSERT INTO delivery_attempts (
+             tenant_id, notification_id, channel_id, channel_type,
+             attempt_number, status, status_code, error_message,
+             started_at, completed_at, duration_ms, feature_vector
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
+          [
+            tenantId,
+            notificationId,
+            channel.id,
+            channel.type,
+            job.attemptsMade + 1,
+            attemptStatus,
+            statusCode,
+            errorMessage,
+            startedAt,
+            completedAt,
+            durationMs,
+            featureVector ? JSON.stringify(featureVector) : null,
+          ],
+        );
+
+        await client.query(
+          `INSERT INTO recipient_channel_stats (
+             tenant_id, recipient, channel_type,
+             attempts_30d, successes_30d, engagements_30d,
+             avg_latency_ms,
+             last_success_at, last_failure_at,
+             notifications_received_24h, notifications_received_7d,
+             updated_at
+           ) VALUES ($1, $2, $3, 1, $4, 0, $5,
+             CASE WHEN $4 = 1 THEN NOW() ELSE NULL END,
+             CASE WHEN $4 = 0 THEN NOW() ELSE NULL END,
+             1, 1, NOW()
+           )
+           ON CONFLICT (tenant_id, recipient, channel_type)
+           DO UPDATE SET
+             attempts_30d = recipient_channel_stats.attempts_30d + 1,
+             successes_30d = recipient_channel_stats.successes_30d + $4,
+             avg_latency_ms = CASE
+               WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5
+               ELSE (recipient_channel_stats.avg_latency_ms * recipient_channel_stats.attempts_30d + $5)
+                    / (recipient_channel_stats.attempts_30d + 1)
+             END,
+             last_success_at = CASE
+               WHEN $4 = 1 THEN NOW()
+               ELSE recipient_channel_stats.last_success_at
+             END,
+             last_failure_at = CASE
+               WHEN $4 = 0 THEN NOW()
+               ELSE recipient_channel_stats.last_failure_at
+             END,
+             notifications_received_24h = recipient_channel_stats.notifications_received_24h + 1,
+             notifications_received_7d = recipient_channel_stats.notifications_received_7d + 1,
+             updated_at = NOW()`,
+          [
+            tenantId,
+            notification.recipient,
+            channel.type,
+            success ? 1 : 0,
+            durationMs,
+          ],
+        );
+
+        await client.query('COMMIT');
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      }
 
       emitDashboard(DASHBOARD_EVENTS.DELIVERY_COMPLETED, {
         notificationId,
