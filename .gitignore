@@ -165,3 +165,10 @@ scripts/
 
 # ML model artifacts
 apps/ml-service/models/
+
+# Local demo and test scripts
+scripts/demo*.sh
+scripts/test-*.sh
+scripts/local-*.sh
+scripts/collect-*.sh
+scripts/verify-*.sh
