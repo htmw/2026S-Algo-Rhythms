@@ -25,8 +25,6 @@ export interface FeatureVector {
   attempts_30d: number;
   notifications_sent_24h: number;
   notifications_sent_7d: number;
-  fatigue_24h: number;
-  fatigue_7d: number;
   notification_priority_score: number;
   content_length: number;
   channel_health: number;
@@ -85,8 +83,6 @@ export function extractFeatures(args: ExtractFeaturesArgs): FeatureVector {
     attempts_30d: attempts,
     notifications_sent_24h: stats?.notifications_received_24h ?? 0,
     notifications_sent_7d: stats?.notifications_received_7d ?? 0,
-    fatigue_24h: (stats?.notifications_received_24h ?? 0) > 10 ? 1 : 0,
-    fatigue_7d: (stats?.notifications_received_7d ?? 0) > 40 ? 1 : 0,
     notification_priority_score: PRIORITY_SCORE[args.priority],
     content_length: args.bodyLength,
     channel_health: args.circuitState === 'closed' ? 1.0 : 0.0,
