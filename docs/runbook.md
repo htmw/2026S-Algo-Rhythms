@@ -49,7 +49,7 @@ npm run dev --workspace=@notifyengine/dashboard
 Copy one of the API keys from step 4 into `apps/dashboard/.env`:
 
 ```
-VITE_API_BASE_URL=http://localhost:3000
+VITE_API_URL=http://localhost:3000
 VITE_API_KEY=ne_test_<key from seed output>
 ```
 
