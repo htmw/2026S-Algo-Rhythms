@@ -286,7 +286,7 @@ export async function processNotification(
              1,
              $4,
              0,
-             CASE WHEN $4 = 1 THEN $5 ELSE NULL END,
+             CASE WHEN $4 = 1 THEN $5::double precision ELSE NULL END,
              CASE WHEN $4 = 1 THEN NOW() ELSE NULL END,
              CASE WHEN $4 = 0 THEN NOW() ELSE NULL END,
              1,
@@ -300,9 +300,9 @@ export async function processNotification(
              avg_latency_ms = CASE
                WHEN $4 = 1 THEN
                  CASE
-                   WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5
+                   WHEN recipient_channel_stats.avg_latency_ms IS NULL THEN $5::double precision
                    ELSE (
-                     recipient_channel_stats.avg_latency_ms * recipient_channel_stats.successes_30d + $5
+                     recipient_channel_stats.avg_latency_ms * recipient_channel_stats.successes_30d + $5::double precision
                    ) / (recipient_channel_stats.successes_30d + 1)
                  END
                ELSE recipient_channel_stats.avg_latency_ms
