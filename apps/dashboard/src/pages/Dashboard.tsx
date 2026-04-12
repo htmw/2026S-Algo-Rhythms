@@ -25,7 +25,7 @@ export default function Dashboard() {
           marginTop: "4px",
           margin: "4px 0 0 0",
         }}>
-          Sprint 1 · Live updates via Socket.IO
+          Sprint 2 · Live updates via Socket.IO
         </p>
       </div>
 

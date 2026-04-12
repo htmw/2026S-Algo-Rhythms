@@ -62,7 +62,7 @@ export default function Sidebar() {
         fontSize: "12px",
         color: "#6B7280",
       }}>
-        Sprint 1 · Feb 19 – Mar 26
+        Sprint 2 · Mar 26 – Apr 16
       </div>
     </aside>
   );
