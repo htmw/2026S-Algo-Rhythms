@@ -56,8 +56,12 @@ export async function startDashboardBridge(
       return;
     }
 
-    const room = `tenant:${message.tenantId}`;
-    dashboardNsp.to(room).emit(message.event, message.payload);
+    const room = message.tenantId === '*' ? '*' : `tenant:${message.tenantId}`;
+    if (message.tenantId === '*') {
+      dashboardNsp.emit(message.event, message.payload);
+    } else {
+      dashboardNsp.to(room).emit(message.event, message.payload);
+    }
 
     logger.debug(
       { tenantId: message.tenantId, event: message.event, room },

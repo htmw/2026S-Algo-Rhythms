@@ -12,6 +12,7 @@ import { tenantRouter } from './routes/tenants.js';
 import { engagementRouter } from './routes/engagement.js';
 import { registerDashboardNamespace } from './socket/dashboardNamespace.js';
 import { startDashboardBridge } from './socket/dashboardBridge.js';
+import { initApiEmitter } from './socket/apiEmitter.js';
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -45,6 +46,7 @@ const io = new SocketIOServer(httpServer, {
 });
 
 const dashboardNsp = registerDashboardNamespace(io);
+initApiEmitter(dashboardNsp);
 
 // Dedicated Redis subscriber connection — must NOT be shared with BullMQ
 // or rate limiting clients. ioredis subscribers cannot issue normal commands.

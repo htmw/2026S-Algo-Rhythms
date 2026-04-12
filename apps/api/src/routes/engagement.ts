@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
+import { emitDashboardEvent, maskEmail } from '../socket/apiEmitter.js';
 
 export const engagementRouter = Router();
 
@@ -82,6 +84,14 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
          updated_at = NOW()`,
       [tenantId, recipient, channelType],
     );
+
+    emitDashboardEvent(tenantId, DASHBOARD_EVENTS.ENGAGEMENT_RECORDED, {
+      notificationId,
+      recipient: maskEmail(recipient),
+      channel: channelType,
+      engagementType: 'email_open',
+      timestamp: new Date().toISOString(),
+    });
 
     logger.info({ requestId, notificationId }, 'Email open tracked');
   } catch (err) {
