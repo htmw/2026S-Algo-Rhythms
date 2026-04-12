@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../lib/api";
+import { getApiKey } from "../lib/apiKey";
 
 interface TenantSummary {
   total: number;
@@ -11,7 +12,7 @@ interface TenantSummary {
 
 export default function Tenants() {
   const [summary, setSummary] = useState<TenantSummary | null>(null);
-  const apiKey = import.meta.env.VITE_API_KEY ?? "";
+  const apiKey = getApiKey();
   const keyPrefix = apiKey ? apiKey.substring(0, 16) + "..." : "not configured";
 
   useEffect(() => {

@@ -1,13 +1,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getApiKey } from '../lib/apiKey';
 
 export type SocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 type EventHandler = (payload: unknown) => void;
-
-function getApiKey(): string {
-  return import.meta.env.VITE_API_KEY ?? '';
-}
 
 export function useDashboardSocket() {
   const socketRef = useRef<Socket | null>(null);
