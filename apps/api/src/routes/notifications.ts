@@ -142,14 +142,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     logger.error({ err, requestId, notificationId }, 'Status update failed');
   }
 
-  emitDashboardEvent(tenantId, DASHBOARD_EVENTS.NOTIFICATION_ENQUEUED, {
-    notificationId,
-    recipient: maskEmail(parsed.recipient),
-    priority: parsed.priority,
-    routingMode: parsed.routing_mode,
-    timestamp: new Date().toISOString(),
-  });
-
   logger.info({ requestId, tenantId, notificationId, priority: parsed.priority }, 'Notification queued');
 
   res.status(202).json({
@@ -161,6 +153,18 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     status_url: `/v1/notifications/${notificationId}`,
     request_id: requestId,
   });
+
+  try {
+    emitDashboardEvent(tenantId, DASHBOARD_EVENTS.NOTIFICATION_ENQUEUED, {
+      notificationId,
+      recipient: maskEmail(parsed.recipient),
+      priority: parsed.priority,
+      routingMode: parsed.routing_mode,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error({ err, requestId, notificationId }, 'Failed to emit enqueued dashboard event');
+  }
 });
 
 // ── GET /v1/notifications/summary ──

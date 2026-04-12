@@ -46,7 +46,7 @@ const io = new SocketIOServer(httpServer, {
 });
 
 const dashboardNsp = registerDashboardNamespace(io);
-initApiEmitter(dashboardNsp);
+initApiEmitter(process.env.REDIS_URL || 'redis://localhost:6379');
 
 // Dedicated Redis subscriber connection — must NOT be shared with BullMQ
 // or rate limiting clients. ioredis subscribers cannot issue normal commands.

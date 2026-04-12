@@ -1,19 +1,28 @@
-import type { Namespace } from 'socket.io';
+import { Redis } from 'ioredis';
 import type { DashboardEventName } from '@notifyengine/shared';
 import { logger } from '../logger.js';
 
 /**
- * Singleton emitter that lets API routes publish dashboard events
- * directly to the Socket.IO /dashboard namespace (same process).
- *
- * Initialised once from index.ts after registerDashboardNamespace().
- * Events follow the same envelope shape as the worker's Redis pub/sub
- * messages but skip the Redis hop since we're already in the API process.
+ * Publishes dashboard events from API routes to the Redis
+ * dashboard:events channel using the same envelope format as
+ * the worker's DashboardEventPublisher. The dashboardBridge
+ * subscriber picks these up and routes to the correct tenant
+ * Socket.IO room — no direct Socket.IO dependency here.
  */
-let dashboardNsp: Namespace | null = null;
 
-export function initApiEmitter(nsp: Namespace): void {
-  dashboardNsp = nsp;
+const DASHBOARD_CHANNEL = 'dashboard:events';
+
+let publisher: Redis | null = null;
+
+export function initApiEmitter(redisUrl: string): void {
+  publisher = new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    lazyConnect: false,
+  });
+
+  publisher.on('error', (err) => {
+    logger.error({ err }, 'API dashboard event publisher Redis error');
+  });
 }
 
 export function maskEmail(email: string): string {
@@ -27,13 +36,13 @@ export function emitDashboardEvent(
   event: DashboardEventName,
   payload: Record<string, unknown>,
 ): void {
-  if (!dashboardNsp) {
-    logger.warn({ event, tenantId }, 'Dashboard namespace not initialised, dropping event');
+  if (!publisher) {
+    logger.warn({ event, tenantId }, 'API dashboard publisher not initialised, dropping event');
     return;
   }
 
-  const room = `tenant:${tenantId}`;
-  dashboardNsp.to(room).emit(event, payload);
-
-  logger.debug({ tenantId, event, room }, 'API dashboard event emitted');
+  const message = JSON.stringify({ tenantId, event, payload });
+  publisher.publish(DASHBOARD_CHANNEL, message).catch((err) => {
+    logger.error({ err, event, tenantId }, 'Failed to publish API dashboard event');
+  });
 }
