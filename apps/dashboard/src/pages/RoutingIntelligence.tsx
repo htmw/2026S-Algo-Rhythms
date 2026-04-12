@@ -10,8 +10,9 @@ interface RoutingDecision {
   model_version: string;
 }
 
-interface NotificationWithRouting {
+interface NotificationListItem {
   id: string;
+  routing_mode: string;
   routing_decision: RoutingDecision | null;
 }
 
@@ -38,22 +39,36 @@ export default function RoutingIntelligence() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // Step 1: fetch recent notifications and find one with an adaptive routing decision
       try {
-        const [notifResp, mlResp] = await Promise.all([
-          apiFetch<{ data: NotificationWithRouting[] }>("/v1/notifications?limit=1"),
-          fetch(`${ML_URL}/model/info`).then((r) => r.json() as Promise<ModelInfo>),
-        ]);
+        const notifResp = await apiFetch<{ data: NotificationListItem[] }>("/v1/notifications?limit=20");
+        const items = notifResp.data ?? [];
 
-        const first = notifResp.data?.[0];
-        if (first?.routing_decision) {
-          setRouting(first.routing_decision);
+        // Prefer an adaptive decision (has predictions), fall back to any decision
+        const adaptive = items.find(
+          (n) => n.routing_decision?.mode === "adaptive" && n.routing_decision?.predictions,
+        );
+        const fallback = items.find((n) => n.routing_decision != null);
+        const best = adaptive ?? fallback;
+
+        if (best?.routing_decision) {
+          setRouting(best.routing_decision);
         }
-        setModelInfo(mlResp);
       } catch {
-        // best effort — page shows empty state
-      } finally {
-        setLoading(false);
+        // API unreachable — page shows empty state
       }
+
+      // Step 2: fetch model info from ML service (may fail due to CORS in browser)
+      try {
+        const mlResp = await fetch(`${ML_URL}/model/info`);
+        if (mlResp.ok) {
+          setModelInfo(await mlResp.json() as ModelInfo);
+        }
+      } catch {
+        // CORS or network error — model info section will use routing_decision data
+      }
+
+      setLoading(false);
     };
 
     void fetchData();
