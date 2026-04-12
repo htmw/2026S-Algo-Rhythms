@@ -29,16 +29,16 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
     return;
   }
 
-  // Both delivery_attempts and recipient_channel_stats have RLS with
-  // FORCE ROW LEVEL SECURITY. We need a dedicated connection with
-  // tenant context set via set_config. Look up the tenant_id from
-  // the delivery_attempts row joined to its notification.
   let client;
   try {
     client = await pool.connect();
 
-    // Look up tenant_id, recipient, and channel_type for this notification
-    const lookup = await client.query(
+    // Look up tenant_id, recipient, and channel_type
+    const lookup = await client.query<{
+      tenant_id: string;
+      recipient: string;
+      channel_type: string;
+    }>(
       `SELECT da.tenant_id, n.recipient, da.channel_type
        FROM delivery_attempts da
        JOIN notifications n ON n.id = da.notification_id
@@ -48,16 +48,16 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
     );
 
     if (lookup.rows.length === 0) {
-      // No delivery attempt found — return pixel without updating
-      client.release();
       res.status(200).end(PIXEL);
       return;
     }
 
     const { tenant_id: tenantId, recipient, channel_type: channelType } = lookup.rows[0];
 
+    // Set tenant context for RLS
     await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
 
+    // Update delivery_attempts engagement
     await client.query(
       `UPDATE delivery_attempts
        SET engaged = true,
@@ -68,15 +68,19 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
       [notificationId],
     );
 
-    // UPSERT recipient_channel_stats: handles the case where the rcs row
-    // doesn't exist yet (tracking pixel fires before worker creates it,
-    // or legacy delivery_attempts from before inline stats).
+    // UPSERT into recipient_channel_stats (single correct update path)
     await client.query(
       `INSERT INTO recipient_channel_stats (
-         tenant_id, recipient, channel_type,
-         attempts_30d, successes_30d, engagements_30d,
-         last_engaged_at, updated_at
-       ) VALUES ($1, $2, $3, 0, 0, 1, NOW(), NOW())
+         tenant_id,
+         recipient,
+         channel_type,
+         attempts_30d,
+         successes_30d,
+         engagements_30d,
+         last_engaged_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, 0, 0, 1, NOW(), NOW())
        ON CONFLICT (tenant_id, recipient, channel_type)
        DO UPDATE SET
          engagements_30d = recipient_channel_stats.engagements_30d + 1,
