@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import TenantSwitcher from "./TenantSwitcher";
 
 const navItems = [
   { label: "Dashboard",     icon: "📊", path: "/dashboard"     },
@@ -55,6 +56,8 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      <TenantSwitcher />
 
       <div style={{
         padding: "16px 24px",

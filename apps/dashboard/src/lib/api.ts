@@ -1,12 +1,13 @@
+import { getApiKey } from './apiKey';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-const API_KEY  = import.meta.env.VITE_API_KEY  ?? '';
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`,
+      'Authorization': `Bearer ${getApiKey()}`,
       ...options?.headers,
     },
     credentials: 'include',
