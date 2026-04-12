@@ -13,6 +13,12 @@ interface DashboardEventMessage {
 
 const VALID_EVENT_NAMES = new Set<string>(Object.values(DASHBOARD_EVENTS));
 
+// Only these events may broadcast to all tenants via tenantId: '*'.
+// Everything else with '*' is dropped to prevent tenant isolation leaks.
+const BROADCAST_ALLOWED = new Set<string>([
+  DASHBOARD_EVENTS.MODEL_RETRAINED,
+]);
+
 function parseMessage(raw: string): DashboardEventMessage | null {
   let parsed: unknown;
   try {
@@ -56,13 +62,24 @@ export async function startDashboardBridge(
       return;
     }
 
-    const room = `tenant:${message.tenantId}`;
-    dashboardNsp.to(room).emit(message.event, message.payload);
-
-    logger.debug(
-      { tenantId: message.tenantId, event: message.event, room },
-      'Dashboard event broadcast',
-    );
+    if (message.tenantId === '*') {
+      if (!BROADCAST_ALLOWED.has(message.event)) {
+        logger.error(
+          { event: message.event },
+          'Broadcast event blocked: not in BROADCAST_ALLOWED whitelist',
+        );
+        return;
+      }
+      dashboardNsp.emit(message.event, message.payload);
+      logger.debug({ event: message.event }, 'Dashboard event broadcast to all tenants');
+    } else {
+      const room = `tenant:${message.tenantId}`;
+      dashboardNsp.to(room).emit(message.event, message.payload);
+      logger.debug(
+        { tenantId: message.tenantId, event: message.event, room },
+        'Dashboard event broadcast',
+      );
+    }
   });
 
   await subscriber.subscribe(DASHBOARD_EVENTS_CHANNEL);

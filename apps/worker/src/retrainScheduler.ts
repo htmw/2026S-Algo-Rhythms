@@ -1,7 +1,8 @@
 import { Queue, Worker } from 'bullmq';
 import type { Job } from 'bullmq';
-import { QUEUE_NAMES } from '@notifyengine/shared';
+import { QUEUE_NAMES, DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { logger } from './logger.js';
+import type { DashboardEventPublisher } from './dashboardEvents.js';
 
 // Spec 5.6 — initial-phase retrain cadence is every 6 hours.
 const RETRAIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -28,7 +29,10 @@ interface RetrainSchedulerHandle {
  * The ml-service /train endpoint already enforces the AUC promotion gate
  * and handles insufficient-data cases internally.
  */
-export function setupRetrainScheduler(connection: { url: string }): RetrainSchedulerHandle {
+export function setupRetrainScheduler(
+  connection: { url: string },
+  dashboardEvents?: DashboardEventPublisher,
+): RetrainSchedulerHandle {
   const queue = new Queue(QUEUE_NAMES.ML_RETRAIN, { connection });
 
   const worker = new Worker(
@@ -63,6 +67,24 @@ export function setupRetrainScheduler(connection: { url: string }): RetrainSched
             { version: body.version, metrics: body.metrics, message: body.message },
             'Retrain completed: model not promoted',
           );
+        }
+
+        if (dashboardEvents && body.version != null && body.metrics != null) {
+          dashboardEvents.emit('*', DASHBOARD_EVENTS.MODEL_RETRAINED, {
+            version: body.version,
+            promoted: body.promoted,
+            metrics: {
+              accuracy: body.metrics.accuracy ?? 0,
+              aucRoc: body.metrics.auc_roc ?? 0,
+              precision: body.metrics.precision ?? 0,
+              recall: body.metrics.recall ?? 0,
+              f1: body.metrics.f1 ?? 0,
+            },
+            trainingSamples: body.metrics.training_samples ?? 0,
+            previousVersion: null,
+            previousAucRoc: null,
+            timestamp: new Date().toISOString(),
+          });
         }
       } catch (err) {
         // Best-effort: log and swallow so the BullMQ worker stays healthy.

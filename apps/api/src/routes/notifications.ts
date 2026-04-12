@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { RETRY_CONFIG } from '@notifyengine/shared';
+import { RETRY_CONFIG, DASHBOARD_EVENTS } from '@notifyengine/shared';
 import type { NotificationJob, NotificationPriority } from '@notifyengine/shared';
 import { SendNotificationSchema, ListNotificationsQuerySchema } from '../schemas/notification.js';
 import type { ListNotificationsQuery } from '../schemas/notification.js';
 import { getNotificationQueue } from '../queue.js';
 import { logger } from '../logger.js';
+import { emitDashboardEvent, maskEmail } from '../socket/apiEmitter.js';
 
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,6 +153,18 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     status_url: `/v1/notifications/${notificationId}`,
     request_id: requestId,
   });
+
+  try {
+    emitDashboardEvent(tenantId, DASHBOARD_EVENTS.NOTIFICATION_ENQUEUED, {
+      notificationId,
+      recipient: maskEmail(parsed.recipient),
+      priority: parsed.priority,
+      routingMode: parsed.routing_mode,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error({ err, requestId, notificationId }, 'Failed to emit enqueued dashboard event');
+  }
 });
 
 // ── GET /v1/notifications/summary ──

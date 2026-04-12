@@ -20,7 +20,7 @@ const dashboardEvents = createDashboardEventPublisher(redisUrl);
 const dlqQueue = new Queue(QUEUE_NAMES.DLQ, { connection });
 
 // SCRUM-164 — periodic ML retrain scheduler (spec 5.6, every 6h)
-const retrainScheduler = setupRetrainScheduler(connection);
+const retrainScheduler = setupRetrainScheduler(connection, dashboardEvents);
 
 // ── One worker per priority queue ──
 const queueConfigs = [
