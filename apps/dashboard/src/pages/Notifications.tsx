@@ -1,3 +1,5 @@
+import NotificationsTable from "../components/NotificationsTable";
+
 export default function Notifications() {
   return (
     <main style={{
@@ -20,9 +22,11 @@ export default function Notifications() {
           color: "#9CA3AF",
           margin: "4px 0 0 0",
         }}>
-          Coming in Sprint 2
+          Sprint 2 · All notifications for this tenant
         </p>
       </div>
+
+      <NotificationsTable />
     </main>
   );
 }

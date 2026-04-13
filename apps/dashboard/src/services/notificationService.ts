@@ -16,13 +16,14 @@ export interface NotificationRecord {
   deliveredAt: string | null;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-const API_KEY = import.meta.env.VITE_API_KEY;
+import { getApiKey } from "../lib/apiKey";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 function getHeaders() {
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${API_KEY}`,
+    Authorization: `Bearer ${getApiKey()}`,
   };
 }
 

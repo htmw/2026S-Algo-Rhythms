@@ -37,8 +37,11 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql://notify:notify@postgres:5432/notifyengine
     volumes:
       - ./apps/ml-service:/app
+      - mlmodels:/app/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,6 +59,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+  mlmodels:
 
 networks:
   notifyengine:

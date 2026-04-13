@@ -4,7 +4,8 @@ import Dashboard from "./pages/Dashboard";
 import Notifications from "./pages/Notifications";
 import Tenants from "./pages/Tenants";
 import Settings from "./pages/Settings";
-
+import { SocketDebugPanel } from "./components/SocketDebugPanel";
+import RoutingIntelligence from "./pages/RoutingIntelligence";
 export default function App() {
   return (
     <BrowserRouter>
@@ -16,7 +17,9 @@ export default function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/tenants" element={<Tenants />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/routing" element={<RoutingIntelligence />} />
         </Routes>
+        <SocketDebugPanel />
       </div>
     </BrowserRouter>
   );

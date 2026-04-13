@@ -76,7 +76,7 @@ export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run dev --workspace=@n
 
 Create `apps/dashboard/.env` with an API key from tenant registration or the seed output:
 ```
-VITE_API_BASE_URL=http://localhost:3000
+VITE_API_URL=http://localhost:3000
 VITE_API_KEY=ne_test_your_key_here
 ```
 Then start:

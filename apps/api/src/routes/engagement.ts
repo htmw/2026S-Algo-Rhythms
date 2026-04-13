@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
+import { emitDashboardEvent, maskEmail } from '../socket/apiEmitter.js';
 
 export const engagementRouter = Router();
 
@@ -27,10 +29,36 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
     return;
   }
 
+  let client;
   try {
-    // No auth/RLS on this endpoint - tracking pixel is hit by email clients.
-    // Uses pool.query() directly (no tenant context needed for this UPDATE).
-    await pool.query(
+    client = await pool.connect();
+
+    // Look up tenant_id, recipient, and channel_type
+    const lookup = await client.query<{
+      tenant_id: string;
+      recipient: string;
+      channel_type: string;
+    }>(
+      `SELECT da.tenant_id, n.recipient, da.channel_type
+       FROM delivery_attempts da
+       JOIN notifications n ON n.id = da.notification_id
+       WHERE da.notification_id = $1
+       LIMIT 1`,
+      [notificationId],
+    );
+
+    if (lookup.rows.length === 0) {
+      res.status(200).end(PIXEL);
+      return;
+    }
+
+    const { tenant_id: tenantId, recipient, channel_type: channelType } = lookup.rows[0];
+
+    // Set tenant context for RLS
+    await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
+
+    // Update delivery_attempts engagement
+    await client.query(
       `UPDATE delivery_attempts
        SET engaged = true,
            engaged_at = NOW(),
@@ -40,9 +68,43 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
       [notificationId],
     );
 
+    // UPSERT into recipient_channel_stats (single correct update path)
+    await client.query(
+      `INSERT INTO recipient_channel_stats (
+         tenant_id,
+         recipient,
+         channel_type,
+         attempts_30d,
+         successes_30d,
+         engagements_30d,
+         last_engaged_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, 0, 0, 1, NOW(), NOW())
+       ON CONFLICT (tenant_id, recipient, channel_type)
+       DO UPDATE SET
+         engagements_30d = recipient_channel_stats.engagements_30d + 1,
+         last_engaged_at = NOW(),
+         updated_at = NOW()`,
+      [tenantId, recipient, channelType],
+    );
+
+    emitDashboardEvent(tenantId, DASHBOARD_EVENTS.ENGAGEMENT_RECORDED, {
+      notificationId,
+      recipient: maskEmail(recipient),
+      channel: channelType,
+      engagementType: 'email_open',
+      timestamp: new Date().toISOString(),
+    });
+
     logger.info({ requestId, notificationId }, 'Email open tracked');
   } catch (err) {
     logger.error({ err, requestId, notificationId }, 'Failed to track email open');
+  } finally {
+    if (client) {
+      await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
+      client.release();
+    }
   }
 
   res.status(200).end(PIXEL);

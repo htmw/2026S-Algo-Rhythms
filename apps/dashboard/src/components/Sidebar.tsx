@@ -1,10 +1,12 @@
 import { NavLink } from "react-router-dom";
+import TenantSwitcher from "./TenantSwitcher";
 
 const navItems = [
   { label: "Dashboard",     icon: "📊", path: "/dashboard"     },
   { label: "Notifications", icon: "🔔", path: "/notifications" },
   { label: "Tenants",       icon: "🏢", path: "/tenants"       },
   { label: "Settings",      icon: "⚙️", path: "/settings"      },
+  { label: "Routing", icon: "🧠", path: "/routing" },
 ];
 
 export default function Sidebar() {
@@ -55,13 +57,15 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      <TenantSwitcher />
+
       <div style={{
         padding: "16px 24px",
         borderTop: "1px solid #374151",
         fontSize: "12px",
         color: "#6B7280",
       }}>
-        Sprint 1 · Feb 19 – Mar 26
+        Sprint 2 · Mar 26 – Apr 16
       </div>
     </aside>
   );
