@@ -2,19 +2,32 @@ import type { Request, Response, NextFunction } from 'express';
 import { Redis } from 'ioredis';
 import { logger } from '../logger.js';
 
-// 1. Extend the Request type to match auth.ts and our needs
+// Define the interface for the request object
 interface AuthenticatedRequest extends Request {
   requestId: string;
   tenantId: string;
-  // This allows us to access the rate limit per second from the database
   tenant?: {
     rate_limit_per_sec?: number;
   };
 }
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
+  maxRetriesPerRequest: 3,
 });
+
+// Pino Structured Logging for Redis Errors
+redis.on('error', (err) => {
+  logger.error({ err }, 'Redis connection error in Rate Limiter');
+});
+
+// LUA Script: Atomic INCR + EXPIRE
+const RATE_LIMIT_LUA = `
+  local current = redis.call('INCR', KEYS[1])
+  if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+  end
+  return {current, redis.call('TTL', KEYS[1])}
+`;
 
 export async function rateLimitMiddleware(
   req: AuthenticatedRequest,
@@ -23,61 +36,50 @@ export async function rateLimitMiddleware(
 ): Promise<void> {
   const { tenantId, requestId } = req;
 
-  // FAIL-OPEN: If auth failed to provide a tenantId, don't block the request here
-  if (!tenantId) {
-    return next();
-  }
+  if (!tenantId) return next();
 
   try {
-    // 2. DYNAMIC LIMITS: Read from tenant record or fallback to 16/sec (approx 1000/min)
+    // 1. DYNAMIC LIMITS: Read from tenant or fallback to 16/sec (~1000/min)
     const limitPerSec = req.tenant?.rate_limit_per_sec || 16;
     const limit = limitPerSec * 60;
     
     const key = `rate_limit:${tenantId}`;
-    const now = Math.floor(Date.now() / 1000);
+    
+    // 2. ATOMIC EXECUTION: Run Lua script
+    const [current, ttl] = await redis.eval(
+      RATE_LIMIT_LUA,
+      1,
+      key,
+      60
+    ) as [number, number];
 
-    // 3. FIX RACE CONDITION: Using multi() ensures atomic operations
-    const result = await redis
-      .multi()
-      .incr(key)
-      .ttl(key)
-      .exec();
-
-    if (!result) throw new Error('Redis multi command failed');
-
-    // ioredis multi results are [[error, value], [error, value]]
-    const current = result[0][1] as number;
-    let ttl = result[1][1] as number;
-
-    // If it's a new key or the TTL was lost, set/reset expiration
-    if (current === 1 || ttl === -1) {
-      await redis.expire(key, 60);
-      ttl = 60;
-    }
-
-    const reset = now + ttl;
+    const reset = Math.floor(Date.now() / 1000) + ttl;
     const remaining = Math.max(limit - current, 0);
 
-    // 4. API CONVENTION: Set standard headers
+    // Standard Headers
     res.setHeader('X-RateLimit-Limit', String(limit));
     res.setHeader('X-RateLimit-Remaining', String(remaining));
     res.setHeader('X-RateLimit-Reset', String(reset));
 
     if (current > limit) {
-      // 5. API CONVENTION: 429 response with metadata
+      // 3. API CONVENTIONS: 429 + Retry-After + Structured Logs
+      logger.warn({ tenantId, requestId, limit }, 'Rate limit exceeded');
+      
+      res.setHeader('Retry-After', String(ttl));
       res.status(429).json({
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
           message: 'Too many requests.',
         },
-        request_id: requestId, // Matches the variable name in auth.ts
+        request_id: requestId,
         retry_after_ms: ttl * 1000,
       });
       return;
     }
   } catch (err) {
-    // FAIL-OPEN: Log the error but let the traffic flow
+    // 4. FAIL-OPEN: If Redis is down, let traffic through
     logger.error({ err, tenantId, requestId }, 'Rate limit check failed - failing open');
+    return next();
   }
 
   next();
