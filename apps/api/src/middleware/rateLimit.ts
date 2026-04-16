@@ -1,14 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Redis } from 'ioredis';
 import { logger } from '../logger.js';
+import { pool } from '../db.js'; // Added pool import
 
 // Define the interface for the request object
 interface AuthenticatedRequest extends Request {
   requestId: string;
   tenantId: string;
-  tenant?: {
-    rate_limit_per_sec?: number;
-  };
 }
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -20,7 +18,7 @@ redis.on('error', (err) => {
   logger.error({ err }, 'Redis connection error in Rate Limiter');
 });
 
-// LUA Script: Atomic INCR + EXPIRE
+// LUA Script: Atomic INCR + EXPIRE + TTL
 const RATE_LIMIT_LUA = `
   local current = redis.call('INCR', KEYS[1])
   if current == 1 then
@@ -39,19 +37,24 @@ export async function rateLimitMiddleware(
   if (!tenantId) return next();
 
   try {
-    // 1. DYNAMIC LIMITS: Read from tenant or fallback to 16/sec (~1000/min)
-    const limitPerSec = req.tenant?.rate_limit_per_sec || 16;
-    const limit = limitPerSec * 60;
+    // 1. DYNAMIC LIMITS: Query the database (Fixes the "req.tenant doesn't exist" issue)
+    const tenantQuery = await pool.query(
+      'SELECT rate_limit_per_sec FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    
+    const limitPerSec = tenantQuery.rows[0]?.rate_limit_per_sec || 16;
+    const limit = limitPerSec * 60; // 1-minute window
     
     const key = `rate_limit:${tenantId}`;
     
     // 2. ATOMIC EXECUTION: Run Lua script
-    const [current, ttl] = await redis.eval(
+    const [current, ttl] = (await redis.eval(
       RATE_LIMIT_LUA,
       1,
       key,
       60
-    ) as [number, number];
+    )) as [number, number];
 
     const reset = Math.floor(Date.now() / 1000) + ttl;
     const remaining = Math.max(limit - current, 0);
@@ -77,7 +80,7 @@ export async function rateLimitMiddleware(
       return;
     }
   } catch (err) {
-    // 4. FAIL-OPEN: If Redis is down, let traffic through
+    // 4. FAIL-OPEN: If Redis or DB is down, let traffic through
     logger.error({ err, tenantId, requestId }, 'Rate limit check failed - failing open');
     return next();
   }
