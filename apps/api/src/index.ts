@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Redis } from 'ioredis';
 import { logger } from './logger.js';
 import { authMiddleware } from './middleware/auth.js';
+import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { notificationRouter } from './routes/notifications.js';
 import { tenantRouter } from './routes/tenants.js';
 import { engagementRouter } from './routes/engagement.js';
@@ -33,7 +34,7 @@ app.use('/v1/tenants', tenantRouter);
 app.use('/v1/engagement', engagementRouter);
 
 // Protected routes
-app.use('/v1/notifications', authMiddleware, notificationRouter);
+app.use('/v1/notifications', authMiddleware, rateLimitMiddleware, notificationRouter);
 
 const httpServer = http.createServer(app);
 
@@ -64,3 +65,4 @@ httpServer.listen(port, () => {
 });
 
 export { app, httpServer, io };
+
