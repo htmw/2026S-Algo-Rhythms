@@ -39,16 +39,11 @@ describe('GET /v1/engagement/track', () => {
 
   it('happy path: tracks engagement and returns pixel', async () => {
     mockQuery
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            tenant_id: 'tenant-1',
-            recipient: 'test@example.com',
-            channel_type: 'email',
-          },
-        ],
-      })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-1' }] }) // get_tenant_for_notification (SECURITY DEFINER)
       .mockResolvedValueOnce({ rows: [] }) // set_config
+      .mockResolvedValueOnce({
+        rows: [{ recipient: 'test@example.com', channel_type: 'email' }],
+      }) // recipient + channel lookup under tenant RLS
       .mockResolvedValueOnce({ rows: [] }) // update delivery_attempts
       .mockResolvedValueOnce({ rows: [] }) // upsert recipient_channel_stats
       .mockResolvedValueOnce({ rows: [] }); // reset tenant context

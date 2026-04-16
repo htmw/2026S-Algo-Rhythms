@@ -243,6 +243,22 @@ function handleQuery(sql: string, params: unknown[] | undefined, tenantCtx: { va
     return Promise.resolve({ rows: [] });
   }
 
+  // SECURITY DEFINER tenant lookup for engagement tracking pixel
+  if (sql.includes('get_tenant_for_notification')) {
+    const id = p[0] as string;
+    const n = db.notifications.find(n => n.id === id);
+    return Promise.resolve({ rows: [{ tenant_id: n?.tenant_id ?? null }] });
+  }
+
+  // Engagement detail lookup: recipient + channel under tenant RLS
+  if (sql.includes('FROM notifications n') && sql.includes('JOIN delivery_attempts')) {
+    const id = p[0] as string;
+    const n = db.notifications.find(n => n.id === id);
+    const da = db.deliveryAttempts.find(a => a.notification_id === id);
+    if (!n || !da) return Promise.resolve({ rows: [] });
+    return Promise.resolve({ rows: [{ recipient: n.recipient, channel_type: da.channel_type }] });
+  }
+
   // Fallback
   return Promise.resolve({ rows: [] });
 }
