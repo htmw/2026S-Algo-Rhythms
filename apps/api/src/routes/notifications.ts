@@ -292,8 +292,8 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
               delivered_via, delivered_at, failed_at, routing_decision,
               metadata, created_at, updated_at
        FROM notifications
-       WHERE id = $1`,
-      [id],
+       WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId],
     );
 
     if (notifResult.rows.length === 0) {
@@ -319,9 +319,9 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
               error_message, engaged, engagement_type, engaged_at,
               started_at, completed_at, duration_ms
        FROM delivery_attempts
-       WHERE notification_id = $1
+       WHERE notification_id = $1 AND tenant_id = $2
        ORDER BY attempt_number ASC`,
-      [id],
+      [id, tenantId],
     );
 
     const { tenant_id, ...notificationData } = notification;

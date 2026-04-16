@@ -23,8 +23,6 @@ interface ModelInfo {
   feature_importance?: Record<string, number>;
 }
 
-const ML_URL = import.meta.env.VITE_ML_URL ?? "http://localhost:8000";
-
 const channelColors: Record<string, string> = {
   email: "#2563EB",
   sms_webhook: "#16A34A",
@@ -58,14 +56,12 @@ export default function RoutingIntelligence() {
         // API unreachable — page shows empty state
       }
 
-      // Step 2: fetch model info from ML service (may fail due to CORS in browser)
+      // Step 2: fetch model info via API proxy (dashboard must not call ml-service directly)
       try {
-        const mlResp = await fetch(`${ML_URL}/model/info`);
-        if (mlResp.ok) {
-          setModelInfo(await mlResp.json() as ModelInfo);
-        }
-      } catch {
-        // CORS or network error — model info section will use routing_decision data
+        const mlResp = await apiFetch<ModelInfo>("/v1/routing/model");
+        setModelInfo(mlResp);
+      } catch (err) {
+        console.error("Failed to fetch model info:", err);
       }
 
       setLoading(false);

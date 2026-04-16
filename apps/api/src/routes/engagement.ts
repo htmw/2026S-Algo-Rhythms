@@ -33,29 +33,41 @@ engagementRouter.get('/track', async (req: Request, res: Response): Promise<void
   try {
     client = await pool.connect();
 
-    // Look up tenant_id, recipient, and channel_type
-    const lookup = await client.query<{
-      tenant_id: string;
-      recipient: string;
-      channel_type: string;
-    }>(
-      `SELECT da.tenant_id, n.recipient, da.channel_type
-       FROM delivery_attempts da
-       JOIN notifications n ON n.id = da.notification_id
-       WHERE da.notification_id = $1
-       LIMIT 1`,
+    // Discover the owning tenant via a SECURITY DEFINER function so we can set
+    // RLS context. All subsequent queries run under normal tenant-scoped policies.
+    const tenantLookup = await client.query<{ tenant_id: string | null }>(
+      'SELECT get_tenant_for_notification($1) AS tenant_id',
       [notificationId],
     );
 
-    if (lookup.rows.length === 0) {
+    const tenantId = tenantLookup.rows[0]?.tenant_id;
+    if (!tenantId) {
       res.status(200).end(PIXEL);
       return;
     }
 
-    const { tenant_id: tenantId, recipient, channel_type: channelType } = lookup.rows[0];
-
     // Set tenant context for RLS
     await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
+
+    // Now fetch recipient + channel_type under tenant-scoped RLS
+    const detailLookup = await client.query<{
+      recipient: string;
+      channel_type: string;
+    }>(
+      `SELECT n.recipient, da.channel_type
+       FROM notifications n
+       JOIN delivery_attempts da ON da.notification_id = n.id
+       WHERE n.id = $1
+       LIMIT 1`,
+      [notificationId],
+    );
+
+    if (detailLookup.rows.length === 0) {
+      res.status(200).end(PIXEL);
+      return;
+    }
+
+    const { recipient, channel_type: channelType } = detailLookup.rows[0];
 
     // Update delivery_attempts engagement
     await client.query(
