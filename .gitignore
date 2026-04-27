@@ -172,3 +172,4 @@ scripts/test-*.sh
 scripts/local-*.sh
 scripts/collect-*.sh
 scripts/verify-*.sh
+~$*
