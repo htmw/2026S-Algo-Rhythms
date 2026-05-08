@@ -3,6 +3,7 @@ import type { NotificationJob, NotificationPriority, RoutingMode } from '@notify
 import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { pool } from './db.js';
 import { deliverEmail } from './channels/email.js';
+import { deliverSmsMock } from './channels/smsMock.js';
 import { logger } from './logger.js';
 import {
   extractFeatures,
@@ -241,6 +242,14 @@ export async function processNotification(
           notification.subject,
           notification.body,
           notification.body_html,
+        );
+        success = result.success;
+        statusCode = result.statusCode ?? null;
+        errorMessage = result.error ?? null;
+      } else if (channel.type === 'sms_webhook') {
+        const result = await deliverSmsMock(
+          notification.recipient,
+          notification.body,
         );
         success = result.success;
         statusCode = result.statusCode ?? null;
