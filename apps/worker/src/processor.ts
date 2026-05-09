@@ -2,7 +2,7 @@ import type { Job } from 'bullmq';
 import type { NotificationJob, NotificationPriority, RoutingMode } from '@notifyengine/shared';
 import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { pool } from './db.js';
-import { deliverEmail } from './channels/email.js';
+import { getDeliveryChannel } from './channels/registry.js';
 import { logger } from './logger.js';
 import {
   extractFeatures,
@@ -236,24 +236,22 @@ export async function processNotification(
       let statusCode: number | null = null;
       let errorMessage: string | null = null;
 
-      if (channel.type === 'email') {
-        const result = await deliverEmail(
-          notification.recipient,
-          notification.subject,
-          notification.body,
-          notification.body_html,
-        );
+      const deliveryChannel = getDeliveryChannel(channel.type);
 
-        success = result.success;
-        statusCode = result.statusCode ?? null;
-        errorMessage = result.error ?? null;
-      } else {
+      if (!deliveryChannel) {
         log.info(
-          { channelType: channel.type, channelId: channel.id },
-          'Channel type not yet implemented - skipping',
+        { channelType: channel.type, channelId: channel.id },
+        'Channel type not implemented - skipping',
         );
         continue;
       }
+
+      const result = await deliveryChannel.deliver(
+        notification.recipient,
+        notification.subject,
+        notification.body,
+        notification.body_html,
+      );
 
       const completedAt = new Date();
       const durationMs = completedAt.getTime() - startedAt.getTime();
