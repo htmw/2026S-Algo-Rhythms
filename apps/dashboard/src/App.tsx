@@ -6,6 +6,7 @@ import Tenants from "./pages/Tenants";
 import Settings from "./pages/Settings";
 import { SocketDebugPanel } from "./components/SocketDebugPanel";
 import RoutingIntelligence from "./pages/RoutingIntelligence";
+import DataTransparency from "./pages/DataTransparency";
 export default function App() {
   return (
     <BrowserRouter>
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/tenants" element={<Tenants />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/routing" element={<RoutingIntelligence />} />
+          <Route path="/transparency" element={<DataTransparency />} />
         </Routes>
         <SocketDebugPanel />
       </div>

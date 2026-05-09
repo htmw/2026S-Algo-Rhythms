@@ -3,11 +3,14 @@ services:
     image: postgres:16-alpine
     ports:
       - "5432:5432"
-    env_file: .env
+    environment:
+      POSTGRES_USER: notify
+      POSTGRES_PASSWORD: notify
+      POSTGRES_DB: notifyengine
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U notify"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -28,19 +31,24 @@ services:
     networks:
       - notifyengine
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - notifyengine
+
   ml-service:
     build:
       context: ./apps/ml-service
       dockerfile: Dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-    working_dir: /app
     ports:
       - "8000:8000"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://notify:notify@postgres:5432/notifyengine
     volumes:
-      - ./apps/ml-service:/app
       - mlmodels:/app/models
     depends_on:
       postgres:
@@ -48,11 +56,62 @@ services:
     networks:
       - notifyengine
 
-  mailpit:
-    image: axllent/mailpit:latest
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://notify:notify@postgres:5432/notifyengine
+      REDIS_URL: redis://redis:6379
+      REDIS_PUBSUB_URL: redis://redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      ML_SERVICE_URL: http://ml-service:8000
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - notifyengine
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "3000:3000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://notify:notify@postgres:5432/notifyengine
+      REDIS_URL: redis://redis:6379
+      REDIS_PUBSUB_URL: redis://redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      ML_SERVICE_URL: http://ml-service:8000
+      PORT: 3000
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - notifyengine
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_SOCKET_URL: http://localhost:3000
+    depends_on:
+      - api
     networks:
       - notifyengine
 

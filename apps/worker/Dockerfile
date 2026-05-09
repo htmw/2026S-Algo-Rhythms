@@ -17,12 +17,11 @@ FROM node:20-slim
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
-
 COPY --from=builder --chown=appuser:appuser /build/apps/worker/dist ./dist
 COPY --from=builder --chown=appuser:appuser /build/apps/worker/package.json ./
 COPY --from=builder --chown=appuser:appuser /build/node_modules ./node_modules
-COPY --from=builder --chown=appuser:appuser /build/packages/shared/dist ../shared/dist
-COPY --from=builder --chown=appuser:appuser /build/packages/shared/package.json ../shared/
+COPY --from=builder --chown=appuser:appuser /build/packages/shared/dist ./node_modules/@notifyengine/shared/dist
+COPY --from=builder --chown=appuser:appuser /build/packages/shared/package.json ./node_modules/@notifyengine/shared/package.json
 
 USER appuser
 CMD ["node", "dist/index.js"]

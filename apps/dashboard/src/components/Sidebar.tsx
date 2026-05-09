@@ -7,6 +7,7 @@ const navItems = [
   { label: "Tenants",       icon: "🏢", path: "/tenants"       },
   { label: "Settings",      icon: "⚙️", path: "/settings"      },
   { label: "Routing", icon: "🧠", path: "/routing" },
+  { label: "Transparency", icon: "🔍", path: "/transparency" },
 ];
 
 export default function Sidebar() {
@@ -65,7 +66,7 @@ export default function Sidebar() {
         fontSize: "12px",
         color: "#6B7280",
       }}>
-        Sprint 2 · Mar 26 – Apr 16
+        Sprint 3 · Apr 16 – May 14
       </div>
     </aside>
   );
