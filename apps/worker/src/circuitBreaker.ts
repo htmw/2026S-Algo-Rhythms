@@ -1,6 +1,8 @@
 import type pg from 'pg';
 import { logger } from './logger.js';
 import type { CircuitState } from './features.js';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
+import type { DashboardEventPublisher } from './dashboardEvents.js';
 
 const WINDOW_SECONDS = 60;
 const FAILURE_RATE_THRESHOLD = 0.5;
@@ -67,6 +69,7 @@ export async function recordCircuitBreakerOutcome(
   client: pg.PoolClient,
   channelId: string,
   success: boolean,
+  dashboardEvents?: DashboardEventPublisher,
 ): Promise<void> {
   const result = await client.query<ChannelCircuitRow>(
     `SELECT id, tenant_id, type, circuit_state, failure_count, circuit_opened_at
@@ -93,7 +96,7 @@ export async function recordCircuitBreakerOutcome(
         [channelId],
       );
 
-      emitStateChange(channel, 'closed', 0);
+      emitStateChange(channel, 'closed', 0, dashboardEvents);
     }
 
     return;
@@ -112,7 +115,7 @@ export async function recordCircuitBreakerOutcome(
       [channelId, nextFailureCount],
     );
 
-    emitStateChange(channel, 'open', nextFailureCount);
+    emitStateChange(channel, 'open', nextFailureCount, dashboardEvents);
     return;
   }
 
@@ -151,7 +154,7 @@ export async function recordCircuitBreakerOutcome(
       [channelId, nextFailureCount],
     );
 
-    emitStateChange(channel, 'open', nextFailureCount);
+    emitStateChange(channel, 'open', nextFailureCount, dashboardEvents);
   }
 }
 
@@ -159,6 +162,7 @@ async function updateCircuitState(
   client: pg.PoolClient,
   channel: ChannelCircuitRow,
   newState: CircuitState,
+  dashboardEvents?: DashboardEventPublisher,
 ): Promise<void> {
   await client.query(
     `UPDATE channels
@@ -167,13 +171,14 @@ async function updateCircuitState(
     [channel.id, newState],
   );
 
-  emitStateChange(channel, newState, channel.failure_count);
+  emitStateChange(channel, newState, channel.failure_count, dashboardEvents);
 }
 
 function emitStateChange(
   channel: ChannelCircuitRow,
   newState: CircuitState,
   failureCount: number,
+  dashboardEvents?: DashboardEventPublisher,
 ): void {
   logger.info(
     {
@@ -186,4 +191,13 @@ function emitStateChange(
     },
     'Circuit breaker state changed',
   );
+  if (dashboardEvents) {
+    dashboardEvents.emit(channel.tenant_id, DASHBOARD_EVENTS.CIRCUIT_BREAKER_STATE_CHANGED, {
+      channelType: channel.type,
+      previousState: channel.circuit_state,
+      newState,
+      failureCount,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
