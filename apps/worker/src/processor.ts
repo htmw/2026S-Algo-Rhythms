@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import {
   extractFeatures,
   type CircuitState,
+  type ContentClassification,
   type FeatureVector,
   type RecipientChannelStatsRow,
 } from './features.js';
@@ -35,6 +36,7 @@ interface NotificationRow {
   subject: string | null;
   body: string;
   body_html: string | null;
+  content_classification: ContentClassification | null;
 }
 
 interface StatsRow extends RecipientChannelStatsRow {
@@ -87,7 +89,7 @@ export async function processNotification(
     });
 
     const notifResult = await client.query<NotificationRow>(
-      `SELECT recipient, subject, body, body_html FROM notifications WHERE id = $1`,
+      `SELECT recipient, subject, body, body_html, content_classification FROM notifications WHERE id = $1`,
       [notificationId],
     );
     const notification = notifResult.rows[0];
@@ -157,6 +159,7 @@ export async function processNotification(
           bodyLength: notification.body.length,
           circuitState: channel.circuit_state,
           stats: statsByChannel.get(channel.type) ?? null,
+          contentClassification: notification.content_classification,
         }),
       );
     }

@@ -86,6 +86,10 @@ def generate_synthetic_dataframe(n_samples: int = 10_000, seed: int = 42) -> pd.
                 "notification_priority_score": int(rng.integers(1, 5)),
                 "content_length": int(rng.integers(20, 500)),
                 "channel_health": float(rng.choice([0.0, 1.0], p=[0.05, 0.95])),
+                "urgency_score": float(rng.random()),
+                "category_encoded": int(rng.integers(0, 5)),
+                "time_sensitivity_score": float(rng.random()),
+                "sentiment_score": float(rng.random()),
                 "engaged": engaged,
             }
         )

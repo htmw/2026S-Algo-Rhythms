@@ -12,6 +12,16 @@ export interface RecipientChannelStatsRow {
   notifications_received_7d: number;
 }
 
+export interface ContentClassification {
+  urgency_score: number;
+  category: string;
+  category_encoded: number;
+  time_sensitivity_score: number;
+  sentiment_score: number;
+  optimal_channel_hint: string;
+  reasoning: string;
+}
+
 export interface FeatureVector {
   channel_type: string;
   hour_of_day: number;
@@ -28,6 +38,10 @@ export interface FeatureVector {
   notification_priority_score: number;
   content_length: number;
   channel_health: number;
+  urgency_score: number;
+  category_encoded: number;
+  time_sensitivity_score: number;
+  sentiment_score: number;
 }
 
 export type CircuitState = 'closed' | 'open' | 'half_open';
@@ -50,6 +64,7 @@ export interface ExtractFeaturesArgs {
   bodyLength: number;
   circuitState: CircuitState;
   stats: RecipientChannelStatsRow | null;
+  contentClassification?: ContentClassification | null;
   now?: Date;
 }
 
@@ -70,6 +85,8 @@ export function extractFeatures(args: ExtractFeaturesArgs): FeatureVector {
   const sundayBased = now.getUTCDay();
   const dayOfWeek = (sundayBased + 6) % 7;
 
+  const cc = args.contentClassification;
+
   return {
     channel_type: args.channelType,
     hour_of_day: now.getUTCHours(),
@@ -86,5 +103,9 @@ export function extractFeatures(args: ExtractFeaturesArgs): FeatureVector {
     notification_priority_score: PRIORITY_SCORE[args.priority],
     content_length: args.bodyLength,
     channel_health: args.circuitState === 'closed' ? 1.0 : 0.0,
+    urgency_score: cc?.urgency_score ?? 0,
+    category_encoded: cc?.category_encoded ?? 0,
+    time_sensitivity_score: cc?.time_sensitivity_score ?? 0,
+    sentiment_score: cc?.sentiment_score ?? 0,
   };
 }
