@@ -11,6 +11,11 @@ const { mockPoolConnect, mockDeliverEmail, mockPredictChannel } = vi.hoisted(() 
   mockPredictChannel: vi.fn(),
 }));
 
+vi.mock('../src/circuitBreaker.js', () => ({
+  shouldAllowChannelProbe: vi.fn().mockResolvedValue(true),
+  recordCircuitBreakerOutcome: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../src/db.js', () => ({
   pool: { connect: mockPoolConnect },
 }));
