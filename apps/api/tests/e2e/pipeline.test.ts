@@ -280,8 +280,12 @@ vi.mock('../../src/db.js', () => ({
   },
 }));
 
+vi.mock('../../src/services/contentClassification.js', () => ({
+  classifyContent: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('../../src/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock('../../src/queue.js', () => ({
