@@ -1,15 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
+import type { ContentClassification } from '../features.js';
 
-export interface ContentClassification {
-  urgency_score: number;
-  category: string;
-  category_encoded: number;
-  time_sensitivity_score: number;
-  sentiment_score: number;
-  optimal_channel_hint: string;
-  reasoning: string;
-}
+export type { ContentClassification };
 
 const VALID_CATEGORIES = ['security', 'marketing', 'transactional', 'social', 'operational'] as const;
 const CATEGORY_ENCODING: Record<string, number> = {

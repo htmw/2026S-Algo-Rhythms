@@ -19,6 +19,7 @@ import {
   buildStaticDecision,
   type RoutingDecisionRecord,
 } from './routingDecision.js';
+import { classifyContent } from './services/contentClassification.js';
 import type { DashboardEventPublisher } from './dashboardEvents.js';
 import { maskEmail } from './dashboardEvents.js';
 
@@ -96,6 +97,20 @@ export async function processNotification(
     if (!notification) {
       log.error('Notification not found in database');
       throw new Error(`Notification ${notificationId} not found`);
+    }
+
+    if (!notification.content_classification) {
+      const classification = await classifyContent(
+        notification.subject ?? '',
+        notification.body,
+      );
+      if (classification) {
+        notification.content_classification = classification;
+        await client.query(
+          `UPDATE notifications SET content_classification = $2::jsonb, updated_at = NOW() WHERE id = $1`,
+          [notificationId, JSON.stringify(classification)],
+        );
+      }
     }
 
     const routingMode = deriveRoutingMode(job.data);

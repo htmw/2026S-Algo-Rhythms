@@ -12,7 +12,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   default: MockAnthropic,
 }));
 
-vi.mock('../../src/logger.js', () => ({
+vi.mock('../src/logger.js', () => ({
   logger: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('../../src/logger.js', () => ({
   },
 }));
 
-import { classifyContent } from '../../src/services/contentClassification.js';
+import { classifyContent } from '../src/services/contentClassification.js';
 
 const VALID_RESPONSE = {
   urgency_score: 0.8,

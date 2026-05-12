@@ -12,7 +12,6 @@
     "test:e2e": "vitest run tests/e2e"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.95.1",
     "@notifyengine/shared": "*",
     "bullmq": "^5.0.0",
     "cors": "^2.8.6",

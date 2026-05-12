@@ -5,10 +5,11 @@ import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import type { DashboardEventPublisher } from '../src/dashboardEvents.js';
 
 // ── Hoisted mocks ──
-const { mockPoolConnect, mockDeliverEmail, mockPredictChannel } = vi.hoisted(() => ({
+const { mockPoolConnect, mockDeliverEmail, mockPredictChannel, mockClassifyContent } = vi.hoisted(() => ({
   mockPoolConnect: vi.fn(),
   mockDeliverEmail: vi.fn(),
   mockPredictChannel: vi.fn(),
+  mockClassifyContent: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../src/db.js', () => ({
@@ -39,6 +40,10 @@ vi.mock('../src/channels/email.js', () => ({
 
 vi.mock('../src/mlClient.js', () => ({
   predictChannel: mockPredictChannel,
+}));
+
+vi.mock('../src/services/contentClassification.js', () => ({
+  classifyContent: mockClassifyContent,
 }));
 
 import { processNotification } from '../src/processor.js';
@@ -458,6 +463,133 @@ describe('processNotification', () => {
     expect(rdJson.mode).toBe('adaptive');
     expect(rdJson.model_version).toBeNull();
     expect(rdJson.reason).toContain('fell back to static');
+  });
+
+  it('calls classifyContent and stores result before routing when classification is null', async () => {
+    const CLASSIFICATION = {
+      urgency_score: 0.8,
+      category: 'security',
+      category_encoded: 0,
+      time_sensitivity_score: 0.9,
+      sentiment_score: 0.3,
+      optimal_channel_hint: 'sms_webhook',
+      reasoning: 'Security alert',
+    };
+
+    const { client, pushResult } = makeMockClient();
+
+    // 0: set_config
+    pushResult([]);
+    // 1: UPDATE status=processing
+    pushResult([]);
+    // 2: SELECT notification content (no classification yet)
+    pushResult([{
+      recipient: 'user@example.com',
+      subject: 'Security Alert',
+      body: 'Suspicious login detected',
+      body_html: null,
+      content_classification: null,
+    }]);
+    // 3: UPDATE content_classification
+    pushResult([]);
+    // 4: SELECT channels
+    pushResult([{
+      id: CHANNEL_ID,
+      type: 'email',
+      label: 'Email',
+      config: {},
+      circuit_state: 'closed',
+      priority: 10,
+    }]);
+    // 5: SELECT recipient_channel_stats
+    pushResult([]);
+    // 6: UPDATE routing_decision
+    pushResult([]);
+    // 7: BEGIN
+    pushResult([]);
+    // 8: INSERT delivery_attempt
+    pushResult([]);
+    // 9: UPSERT recipient_channel_stats
+    pushResult([]);
+    // 10: COMMIT
+    pushResult([]);
+    // 11: UPDATE status=delivered
+    pushResult([]);
+    // 12: set_config reset
+    pushResult([]);
+
+    mockPoolConnect.mockResolvedValueOnce(client);
+    mockClassifyContent.mockResolvedValueOnce(CLASSIFICATION);
+    mockDeliverEmail.mockResolvedValueOnce({ success: true, statusCode: 200 });
+
+    await processNotification(makeJob());
+
+    expect(mockClassifyContent).toHaveBeenCalledWith('Security Alert', 'Suspicious login detected');
+
+    // Verify UPDATE content_classification (call 3)
+    const classifyCall = client.query.mock.calls[3];
+    expect(classifyCall[0]).toContain('content_classification');
+    expect(classifyCall[1][0]).toBe(NOTIF_ID);
+    expect(JSON.parse(classifyCall[1][1])).toEqual(CLASSIFICATION);
+  });
+
+  it('skips classifyContent when notification already has content_classification', async () => {
+    const EXISTING_CLASSIFICATION = {
+      urgency_score: 0.5,
+      category: 'transactional',
+      category_encoded: 2,
+      time_sensitivity_score: 0.3,
+      sentiment_score: 0.7,
+      optimal_channel_hint: 'email',
+      reasoning: 'Transactional notification',
+    };
+
+    const { client, pushResult } = makeMockClient();
+
+    // 0: set_config
+    pushResult([]);
+    // 1: UPDATE status=processing
+    pushResult([]);
+    // 2: SELECT notification content (already has classification)
+    pushResult([{
+      recipient: 'user@example.com',
+      subject: 'Test',
+      body: 'Hello world',
+      body_html: null,
+      content_classification: EXISTING_CLASSIFICATION,
+    }]);
+    // 3: SELECT channels
+    pushResult([{
+      id: CHANNEL_ID,
+      type: 'email',
+      label: 'Email',
+      config: {},
+      circuit_state: 'closed',
+      priority: 10,
+    }]);
+    // 4: SELECT recipient_channel_stats
+    pushResult([]);
+    // 5: UPDATE routing_decision
+    pushResult([]);
+    // 6: BEGIN
+    pushResult([]);
+    // 7: INSERT delivery_attempt
+    pushResult([]);
+    // 8: UPSERT recipient_channel_stats
+    pushResult([]);
+    // 9: COMMIT
+    pushResult([]);
+    // 10: UPDATE status=delivered
+    pushResult([]);
+    // 11: set_config reset
+    pushResult([]);
+
+    mockPoolConnect.mockResolvedValueOnce(client);
+    mockDeliverEmail.mockResolvedValueOnce({ success: true, statusCode: 200 });
+
+    await processNotification(makeJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
   });
 });
 

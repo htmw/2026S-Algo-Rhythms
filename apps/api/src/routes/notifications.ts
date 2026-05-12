@@ -8,7 +8,6 @@ import type { ListNotificationsQuery } from '../schemas/notification.js';
 import { getNotificationQueue } from '../queue.js';
 import { logger } from '../logger.js';
 import { emitDashboardEvent, maskEmail } from '../socket/apiEmitter.js';
-import { classifyContent } from '../services/contentClassification.js';
 
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -70,8 +69,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     }
   }
 
-  const classification = await classifyContent(parsed.subject || '', parsed.body);
-
   let notificationId: string;
   let createdAt: string;
 
@@ -80,8 +77,8 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
       `INSERT INTO notifications (
          tenant_id, idempotency_key, recipient, subject, body, body_html,
          priority, routing_mode, channel_preference, force_channel, metadata,
-         content_classification, status
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
+         status
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
        RETURNING id, created_at`,
       [
         tenantId,
@@ -95,7 +92,6 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
         parsed.channel_preference || null,
         parsed.force_channel || null,
         parsed.metadata ? JSON.stringify(parsed.metadata) : '{}',
-        classification ? JSON.stringify(classification) : null,
       ],
     );
 
