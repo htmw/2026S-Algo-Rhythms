@@ -8,6 +8,7 @@
 .env
 .env.*
 !.env.example
+# Anthropic API key lives in .env only - never commit
 
 # =====================
 # CLAUDE PROJECT DOCS
