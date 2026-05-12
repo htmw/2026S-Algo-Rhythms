@@ -2,14 +2,15 @@
 
 Implements spec 5.6. Two entry points:
 
-* `bootstrap_from_synthetic(n_samples)` — generates an in-memory training set
-  with hidden user archetypes (no DB dependency) and trains a fresh model.
-  Used on cold start when no model artifact exists yet.
+* `bootstrap_from_synthetic(n_samples, database_url)` — generates an in-memory
+  training set with hidden user archetypes and trains a fresh model.
+  Used on cold start when no model artifact exists yet. When database_url is
+  provided, records the model in model_metadata.
 
 * `retrain_from_db(database_url, tenant_id)` — pulls labeled delivery_attempts
   from Postgres and retrains. Returns the new model only if AUC improves over
   the current active model. Synchronous psycopg2 — called from a scheduled
-  job, not the request path.
+  job, not the request path. Records the model in model_metadata on promotion.
 
 The synthetic data generator here is intentionally separate from
 `synthetic.py` (which seeds the production DB tables). Keeping them split
@@ -17,7 +18,9 @@ means trainer tests don't need a database.
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -93,11 +96,60 @@ def generate_synthetic_dataframe(n_samples: int = 10_000, seed: int = 42) -> pd.
 # ───────────────────────── trainer ─────────────────────────
 
 
+def _insert_model_metadata(
+    conn,
+    model: EngagementModel,
+    model_path: str,
+    is_active: bool,
+    tenant_id: Optional[str] = None,
+) -> str:
+    """INSERT a row into model_metadata and return the generated UUID."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO model_metadata (
+                tenant_id, version, model_path, training_samples,
+                feature_columns, accuracy, auc_roc, precision_score,
+                recall_score, f1_score, feature_importance,
+                is_active, promoted_at
+            ) VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s::jsonb,
+                %s, CASE WHEN %s THEN NOW() ELSE NULL END
+            )
+            RETURNING id
+            """,
+            (
+                tenant_id,
+                model.version,
+                model_path,
+                model.metrics.get("training_samples", 0),
+                model.FEATURE_COLUMNS,
+                model.metrics.get("accuracy"),
+                model.metrics.get("auc_roc"),
+                model.metrics.get("precision"),
+                model.metrics.get("recall"),
+                model.metrics.get("f1"),
+                json.dumps(model.feature_importance) if model.feature_importance else None,
+                is_active,
+                is_active,
+            ),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return str(row[0])
+
+
 class ModelTrainer:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def bootstrap_from_synthetic(self, n_samples: Optional[int] = None) -> EngagementModel:
+    def bootstrap_from_synthetic(
+        self,
+        n_samples: Optional[int] = None,
+        database_url: Optional[str] = None,
+    ) -> EngagementModel:
         """Train a fresh model from synthetic data and persist to settings.model_path."""
         n = n_samples or self.settings.bootstrap_samples
         logger.info("Bootstrapping model from %d synthetic samples", n)
@@ -110,6 +162,27 @@ class ModelTrainer:
 
         model.save(self.settings.model_path)
         logger.info("Bootstrap model saved to %s", self.settings.model_path)
+
+        db_url = database_url or os.environ.get("DATABASE_URL")
+        if db_url:
+            import psycopg2  # type: ignore
+
+            conn = psycopg2.connect(db_url)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE model_metadata SET is_active = false WHERE is_active = true AND tenant_id IS NULL"
+                    )
+                    conn.commit()
+                metadata_id = _insert_model_metadata(
+                    conn, model, str(self.settings.model_path), is_active=True,
+                )
+                logger.info("Bootstrap model_metadata row: %s", metadata_id)
+            finally:
+                conn.close()
+        else:
+            logger.warning("No DATABASE_URL — skipping model_metadata insert")
+
         return model
 
     def retrain_from_db(
@@ -117,16 +190,11 @@ class ModelTrainer:
         database_url: str,
         tenant_id: Optional[str] = None,
         current_model: Optional[EngagementModel] = None,
-    ) -> Optional[EngagementModel]:
+    ) -> tuple[Optional[EngagementModel], Optional[str]]:
         """Pull last 30 days of labeled delivery_attempts and retrain.
 
-        Returns the new model ONLY if AUC improves on the current model
-        (or no current model exists). Returns None if there's not enough
-        data or the new model didn't beat the incumbent.
+        Returns (new_model, metadata_id) if AUC improves, else (None, None).
         """
-        # Local import so the prediction service doesn't need psycopg2 at import time.
-        import json
-
         import psycopg2  # type: ignore
 
         from features import DEFAULTS as FEATURE_DEFAULTS
@@ -156,47 +224,56 @@ class ModelTrainer:
                     (cutoff, tenant_id, tenant_id),
                 )
                 rows = cur.fetchall()
+
+            if len(rows) < self.settings.min_training_samples:
+                logger.info(
+                    "Only %d samples, need %d — staying in cold start",
+                    len(rows),
+                    self.settings.min_training_samples,
+                )
+                return None, None
+
+            records = []
+            for channel_type, engaged, feature_vector, _priority in rows:
+                features = feature_vector if isinstance(feature_vector, dict) else json.loads(feature_vector or "{}")
+                for key, default in FEATURE_DEFAULTS.items():
+                    if features.get(key) is None:
+                        features[key] = default
+                features["channel_type"] = channel_type
+                features["engaged"] = 1 if engaged else 0
+                records.append(features)
+
+            df = pd.DataFrame(records)
+            new_model = EngagementModel()
+            new_model.version = f"v{int(datetime.utcnow().timestamp())}"
+            metrics = new_model.train(df)
+
+            current_auc = (current_model.metrics.get("auc_roc", 0.0) if current_model else 0.0)
+            if metrics["auc_roc"] <= current_auc:
+                logger.info(
+                    "New model AUC %.4f did not beat current %.4f — discarding",
+                    metrics["auc_roc"],
+                    current_auc,
+                )
+                return None, None
+
+            new_model.save(self.settings.model_path)
+            logger.info("Promoted new model %s (AUC %.4f)", new_model.version, metrics["auc_roc"])
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE model_metadata SET is_active = false WHERE is_active = true AND (tenant_id = %s OR (%s IS NULL AND tenant_id IS NULL))",
+                    (tenant_id, tenant_id),
+                )
+                conn.commit()
+            metadata_id = _insert_model_metadata(
+                conn, new_model, str(self.settings.model_path),
+                is_active=True, tenant_id=tenant_id,
+            )
+            logger.info("Retrain model_metadata row: %s", metadata_id)
+            return new_model, metadata_id
         finally:
             conn.close()
-
-        if len(rows) < self.settings.min_training_samples:
-            logger.info(
-                "Only %d samples, need %d — staying in cold start",
-                len(rows),
-                self.settings.min_training_samples,
-            )
-            return None
-
-        records = []
-        for channel_type, engaged, feature_vector, _priority in rows:
-            features = feature_vector if isinstance(feature_vector, dict) else json.loads(feature_vector or "{}")
-            # Backfill any missing feature keys with canonical defaults so legacy
-            # rows with partial feature_vector payloads don't drop columns from
-            # the resulting DataFrame.
-            for key, default in FEATURE_DEFAULTS.items():
-                if features.get(key) is None:
-                    features[key] = default
-            features["channel_type"] = channel_type
-            features["engaged"] = 1 if engaged else 0
-            records.append(features)
-
-        df = pd.DataFrame(records)
-        new_model = EngagementModel()
-        new_model.version = f"v{int(datetime.utcnow().timestamp())}"
-        metrics = new_model.train(df)
-
-        current_auc = (current_model.metrics.get("auc_roc", 0.0) if current_model else 0.0)
-        if metrics["auc_roc"] <= current_auc:
-            logger.info(
-                "New model AUC %.4f did not beat current %.4f — discarding",
-                metrics["auc_roc"],
-                current_auc,
-            )
-            return None
-
-        new_model.save(self.settings.model_path)
-        logger.info("Promoted new model %s (AUC %.4f)", new_model.version, metrics["auc_roc"])
-        return new_model
 
     def exploration_rate_for_volume(self, sample_count: int) -> float:
         """Map data volume to the spec 5.6 phase exploration rate."""

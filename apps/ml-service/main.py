@@ -44,10 +44,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
                     settings.model_path,
                     err,
                 )
-                model = trainer.bootstrap_from_synthetic()
+                model = trainer.bootstrap_from_synthetic(database_url=os.environ.get("DATABASE_URL"))
         else:
             logger.info("No model file at %s — bootstrapping from synthetic data", settings.model_path)
-            model = trainer.bootstrap_from_synthetic()
+            model = trainer.bootstrap_from_synthetic(database_url=os.environ.get("DATABASE_URL"))
 
         logger.info(
             "Model ready: version=%s metrics=%s",
@@ -102,6 +102,7 @@ class TrainResponse(BaseModel):
     promoted: bool
     version: str | None = None
     metrics: dict[str, float] | None = None
+    metadata_id: str | None = None
     message: str
 
 
@@ -158,7 +159,7 @@ async def train(request: TrainRequest) -> TrainResponse:
         )
 
     try:
-        new_model = trainer.retrain_from_db(
+        new_model, metadata_id = trainer.retrain_from_db(
             database_url=database_url,
             tenant_id=request.tenant_id,
             current_model=model,
@@ -180,6 +181,7 @@ async def train(request: TrainRequest) -> TrainResponse:
         promoted=True,
         version=new_model.version,
         metrics=new_model.metrics,
+        metadata_id=metadata_id,
         message="New model trained and promoted",
     )
 
