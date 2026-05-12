@@ -58,6 +58,10 @@ def build_feature_vector(profile: str, channel: str) -> dict:
         "notification_priority_score": random.choice([1, 2, 3, 4]),
         "content_length": random.randint(20, 500),
         "channel_health": round(random.uniform(0.7, 1.0), 2),
+        "urgency_score": round(random.random(), 3),
+        "category_encoded": random.randint(0, 4),
+        "time_sensitivity_score": round(random.random(), 3),
+        "sentiment_score": round(random.random(), 3),
     }
 
 

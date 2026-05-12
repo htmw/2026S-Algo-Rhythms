@@ -42,6 +42,10 @@ def test_exploration_rate_is_approximately_observed() -> None:
         "notification_priority_score": 2,
         "content_length": 100,
         "channel_health": 1.0,
+        "urgency_score": 0.5,
+        "category_encoded": 2,
+        "time_sensitivity_score": 0.4,
+        "sentiment_score": 0.6,
     }
 
     explored = 0

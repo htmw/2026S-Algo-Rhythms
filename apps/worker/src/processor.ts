@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import {
   extractFeatures,
   type CircuitState,
+  type ContentClassification,
   type FeatureVector,
   type RecipientChannelStatsRow,
 } from './features.js';
@@ -18,6 +19,7 @@ import {
   buildStaticDecision,
   type RoutingDecisionRecord,
 } from './routingDecision.js';
+import { classifyContent } from './services/contentClassification.js';
 import type { DashboardEventPublisher } from './dashboardEvents.js';
 import { maskEmail } from './dashboardEvents.js';
 
@@ -35,6 +37,7 @@ interface NotificationRow {
   subject: string | null;
   body: string;
   body_html: string | null;
+  content_classification: ContentClassification | null;
 }
 
 interface StatsRow extends RecipientChannelStatsRow {
@@ -87,13 +90,27 @@ export async function processNotification(
     });
 
     const notifResult = await client.query<NotificationRow>(
-      `SELECT recipient, subject, body, body_html FROM notifications WHERE id = $1`,
+      `SELECT recipient, subject, body, body_html, content_classification FROM notifications WHERE id = $1`,
       [notificationId],
     );
     const notification = notifResult.rows[0];
     if (!notification) {
       log.error('Notification not found in database');
       throw new Error(`Notification ${notificationId} not found`);
+    }
+
+    if (!notification.content_classification) {
+      const classification = await classifyContent(
+        notification.subject ?? '',
+        notification.body,
+      );
+      if (classification) {
+        notification.content_classification = classification;
+        await client.query(
+          `UPDATE notifications SET content_classification = $2::jsonb, updated_at = NOW() WHERE id = $1`,
+          [notificationId, JSON.stringify(classification)],
+        );
+      }
     }
 
     const routingMode = deriveRoutingMode(job.data);
@@ -157,6 +174,7 @@ export async function processNotification(
           bodyLength: notification.body.length,
           circuitState: channel.circuit_state,
           stats: statsByChannel.get(channel.type) ?? null,
+          contentClassification: notification.content_classification,
         }),
       );
     }

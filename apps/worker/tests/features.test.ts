@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFeatures, type RecipientChannelStatsRow } from '../src/features.js';
+import { extractFeatures, type RecipientChannelStatsRow, type ContentClassification } from '../src/features.js';
 
 const NOW = new Date('2026-04-08T14:00:00Z'); // Wednesday 14:00 UTC
 
@@ -89,5 +89,92 @@ describe('extractFeatures', () => {
     });
     expect(f.channel_health).toBe(0);
     expect(f.notification_priority_score).toBe(4);
+  });
+
+  it('produces exactly 19 keys when content_classification is present', () => {
+    const classification: ContentClassification = {
+      urgency_score: 0.8,
+      category: 'security',
+      category_encoded: 0,
+      time_sensitivity_score: 0.9,
+      sentiment_score: 0.3,
+      optimal_channel_hint: 'sms_webhook',
+      reasoning: 'Security alert',
+    };
+
+    const f = extractFeatures({
+      channelType: 'email',
+      priority: 'high',
+      bodyLength: 200,
+      circuitState: 'closed',
+      stats: fullStats,
+      contentClassification: classification,
+      now: NOW,
+    });
+
+    expect(Object.keys(f).length).toBe(19);
+    expect(f.urgency_score).toBe(0.8);
+    expect(f.category_encoded).toBe(0);
+    expect(f.time_sensitivity_score).toBe(0.9);
+    expect(f.sentiment_score).toBe(0.3);
+  });
+
+  it('produces exactly 19 keys when content_classification is null', () => {
+    const f = extractFeatures({
+      channelType: 'email',
+      priority: 'standard',
+      bodyLength: 100,
+      circuitState: 'closed',
+      stats: null,
+      contentClassification: null,
+      now: NOW,
+    });
+
+    expect(Object.keys(f).length).toBe(19);
+    expect(f.urgency_score).toBe(0);
+    expect(f.category_encoded).toBe(0);
+    expect(f.time_sensitivity_score).toBe(0);
+    expect(f.sentiment_score).toBe(0);
+  });
+
+  it('feature key names match ML service FEATURE_COLUMNS', () => {
+    const ML_FEATURE_COLUMNS = [
+      'channel_type_encoded',
+      'hour_of_day',
+      'day_of_week',
+      'is_weekend',
+      'historical_success_rate',
+      'historical_engagement_rate',
+      'hours_since_last_engagement',
+      'hours_since_last_success',
+      'avg_latency_ms',
+      'attempts_30d',
+      'notifications_sent_24h',
+      'notifications_sent_7d',
+      'notification_priority_score',
+      'content_length',
+      'channel_health',
+      'urgency_score',
+      'category_encoded',
+      'time_sensitivity_score',
+      'sentiment_score',
+    ];
+
+    const f = extractFeatures({
+      channelType: 'email',
+      priority: 'standard',
+      bodyLength: 100,
+      circuitState: 'closed',
+      stats: null,
+      now: NOW,
+    });
+
+    const workerKeys = new Set(Object.keys(f));
+    // Worker sends channel_type (string), ML encodes it to channel_type_encoded
+    workerKeys.delete('channel_type');
+    workerKeys.add('channel_type_encoded');
+
+    const mlKeys = new Set(ML_FEATURE_COLUMNS);
+    expect(workerKeys).toEqual(mlKeys);
   });
 });

@@ -76,7 +76,8 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     const result = await dbClient.query(
       `INSERT INTO notifications (
          tenant_id, idempotency_key, recipient, subject, body, body_html,
-         priority, routing_mode, channel_preference, force_channel, metadata, status
+         priority, routing_mode, channel_preference, force_channel, metadata,
+         status
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
        RETURNING id, created_at`,
       [
@@ -241,7 +242,8 @@ notificationRouter.get('/', async (req: Request, res: Response): Promise<void> =
          id, recipient, channel_preference, force_channel,
          routing_mode, subject, priority, status,
          delivered_via, delivered_at, failed_at,
-         metadata, routing_decision, created_at, updated_at
+         metadata, routing_decision, content_classification,
+         created_at, updated_at
        FROM notifications
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
@@ -290,7 +292,7 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
     const notifResult = await dbClient.query(
       `SELECT id, tenant_id, status, recipient, subject, priority, routing_mode,
               delivered_via, delivered_at, failed_at, routing_decision,
-              metadata, created_at, updated_at
+              content_classification, metadata, created_at, updated_at
        FROM notifications
        WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId],
