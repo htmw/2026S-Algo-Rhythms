@@ -68,7 +68,7 @@ export async function classifyContent(subject: string, body: string): Promise<Co
   try {
     const client = new Anthropic();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     let response;
     try {

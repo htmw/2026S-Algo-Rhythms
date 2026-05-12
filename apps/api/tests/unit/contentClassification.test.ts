@@ -98,7 +98,7 @@ describe('classifyContent', () => {
     const result = await classifyContent('Test', 'Test body');
 
     expect(result).toBeNull();
-  }, 10000);
+  }, 15000);
 
   it('returns null on malformed JSON response', async () => {
     mockCreate.mockResolvedValueOnce(sdkResponse('this is not json'));
