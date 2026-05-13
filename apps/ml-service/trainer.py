@@ -48,6 +48,16 @@ _ARCHETYPE_NAMES = list(_ARCHETYPES.keys())
 _TRAIN_CHANNELS = ["email", "websocket", "sms_webhook"]
 
 
+_CONTENT_CATEGORIES = {
+    0: {"name": "marketing", "urgency": (0.1, 0.3), "time_sens": (0.2, 0.6), "sentiment": (0.6, 0.9)},
+    1: {"name": "transactional", "urgency": (0.4, 0.7), "time_sens": (0.3, 0.6), "sentiment": (0.4, 0.6)},
+    2: {"name": "security", "urgency": (0.8, 1.0), "time_sens": (0.7, 1.0), "sentiment": (0.2, 0.5)},
+    3: {"name": "account", "urgency": (0.3, 0.6), "time_sens": (0.2, 0.5), "sentiment": (0.4, 0.6)},
+    4: {"name": "social", "urgency": (0.1, 0.4), "time_sens": (0.1, 0.4), "sentiment": (0.5, 0.8)},
+    5: {"name": "system", "urgency": (0.5, 0.8), "time_sens": (0.4, 0.7), "sentiment": (0.3, 0.5)},
+}
+
+
 def generate_synthetic_dataframe(n_samples: int = 10_000, seed: int = 42) -> pd.DataFrame:
     """In-process synthetic training data — no DB required."""
     rng = np.random.default_rng(seed)
@@ -59,11 +69,19 @@ def generate_synthetic_dataframe(n_samples: int = 10_000, seed: int = 42) -> pd.
         hour = int(rng.integers(0, 24))
         dow = int(rng.integers(0, 7))
 
+        category = int(rng.integers(0, len(_CONTENT_CATEGORIES)))
+        cat_info = _CONTENT_CATEGORIES[category]
+        urgency = float(np.clip(rng.uniform(*cat_info["urgency"]), 0.0, 1.0))
+        time_sensitivity = float(np.clip(rng.uniform(*cat_info["time_sens"]), 0.0, 1.0))
+        sentiment = float(np.clip(rng.uniform(*cat_info["sentiment"]), 0.0, 1.0))
+
         engage_rate = _ARCHETYPES[archetype][channel]
         # Time-of-day modifier for the work_hours_emailer archetype
         if archetype == "work_hours_emailer" and channel == "email":
             if not (9 <= hour <= 17 and dow < 5):
                 engage_rate *= 0.25
+        # Higher urgency boosts engagement across all archetypes
+        engage_rate = min(1.0, engage_rate + urgency * 0.15)
 
         engaged = int(rng.random() < engage_rate)
 
@@ -86,10 +104,10 @@ def generate_synthetic_dataframe(n_samples: int = 10_000, seed: int = 42) -> pd.
                 "notification_priority_score": int(rng.integers(1, 5)),
                 "content_length": int(rng.integers(20, 500)),
                 "channel_health": float(rng.choice([0.0, 1.0], p=[0.05, 0.95])),
-                "urgency_score": float(rng.random()),
-                "category_encoded": int(rng.integers(0, 5)),
-                "time_sensitivity_score": float(rng.random()),
-                "sentiment_score": float(rng.random()),
+                "urgency_score": round(urgency, 3),
+                "category_encoded": category,
+                "time_sensitivity_score": round(time_sensitivity, 3),
+                "sentiment_score": round(sentiment, 3),
                 "engaged": engaged,
             }
         )

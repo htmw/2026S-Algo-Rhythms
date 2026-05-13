@@ -108,6 +108,11 @@ class EngagementModel:
         `features` MUST include `channel_type` (string). Unknown channel types
         fall back to the most common known encoding (0) rather than raising,
         so a typo in the worker doesn't crash routing.
+
+        If the loaded model was trained on fewer features than the current
+        FEATURE_COLUMNS, the input DataFrame is filtered to match the model's
+        expected features. This prevents ValueError on feature_names mismatch
+        during the transition between model versions.
         """
         channel = features.get("channel_type", "email")
         try:
@@ -118,6 +123,28 @@ class EngagementModel:
         row = {col: features.get(col, 0) for col in self.FEATURE_COLUMNS}
         row["channel_type_encoded"] = encoded
         X = pd.DataFrame([row])[self.FEATURE_COLUMNS]
+
+        model_features = getattr(self.model, "feature_names_in_", None)
+        if model_features is None:
+            booster = getattr(self.model, "get_booster", None)
+            if booster is not None:
+                names = booster().feature_names
+                if names:
+                    model_features = names
+        if model_features is not None:
+            model_feature_set = set(model_features)
+            input_feature_set = set(X.columns)
+            if model_feature_set != input_feature_set:
+                import logging
+                logging.getLogger("ml-service").warning(
+                    "Model expects %d features, received %d. "
+                    "Dropping unknown features. Retrain to use full feature set.",
+                    len(model_feature_set),
+                    len(input_feature_set),
+                )
+                shared = [c for c in X.columns if c in model_feature_set]
+                X = X[shared]
+
         proba = self.model.predict_proba(X)[0]
         return float(proba[1]) if len(proba) > 1 else float(proba[0])
 
