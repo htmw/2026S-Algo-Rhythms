@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api.js';
 import { useNotificationPolling, type RawContentClassification } from '../hooks/useNotificationPolling.js';
 import { ContentClassificationCard } from './ContentClassificationCard.js';
 import { PredictionRoutingCard } from './PredictionRoutingCard.js';
+import { EngagementResponseCard } from './EngagementResponseCard.js';
 
 interface ComposeNotificationFormProps {
   onNotificationSent?: (notification: { id: string; status: string }) => void;
@@ -78,7 +79,7 @@ export function ComposeNotificationForm({ onNotificationSent }: ComposeNotificat
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { classification, routingDecision, deliveredVia, status, isPolling, error: pollingError } = useNotificationPolling(notificationId);
+  const { classification, routingDecision, deliveredVia, status, engagementResult, isPolling, error: pollingError } = useNotificationPolling(notificationId);
 
   function handlePersonaChange(value: string) {
     setPersona(value);
@@ -273,6 +274,19 @@ export function ComposeNotificationForm({ onNotificationSent }: ComposeNotificat
               routingDecision={routingDecision}
               deliveredVia={deliveredVia}
               status={status}
+            />
+          )}
+
+          {classification && !engagementResult && isPolling && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Waiting for engagement simulation...
+            </div>
+          )}
+
+          {engagementResult && (
+            <EngagementResponseCard
+              engagement={engagementResult}
+              recipientId={recipient}
             />
           )}
 

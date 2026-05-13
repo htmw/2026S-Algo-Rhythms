@@ -42,7 +42,7 @@ export default function Tenants() {
           color: "#9CA3AF",
           margin: "4px 0 0 0",
         }}>
-          Sprint 2 · Current tenant context
+          Current tenant context
         </p>
       </div>
 
