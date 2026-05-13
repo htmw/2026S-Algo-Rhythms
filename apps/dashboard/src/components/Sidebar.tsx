@@ -6,6 +6,7 @@ import {
   Building2,
   Settings,
   Brain,
+  Wand2,
 } from "lucide-react";
 import TenantSwitcher from "./TenantSwitcher";
 
@@ -15,6 +16,7 @@ const navItems: { label: string; icon: ReactNode; path: string }[] = [
   { label: "Tenants",       icon: <Building2 className="h-5 w-5" />,       path: "/tenants"       },
   { label: "Settings",      icon: <Settings className="h-5 w-5" />,        path: "/settings"      },
   { label: "Routing",       icon: <Brain className="h-5 w-5" />,           path: "/routing"       },
+  { label: "Simulation",   icon: <Wand2 className="h-5 w-5" />,          path: "/simulation"    },
 ];
 
 export default function Sidebar() {
