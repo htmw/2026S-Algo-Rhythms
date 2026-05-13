@@ -20,6 +20,7 @@ export interface ContentClassification {
   sentiment_score: number;
   optimal_channel_hint: string;
   reasoning: string;
+  keywords?: string[];
 }
 
 export interface FeatureVector {
