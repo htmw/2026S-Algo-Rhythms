@@ -382,7 +382,7 @@ export async function processNotification(
         throw txErr;
       }
 
-      await recordCircuitBreakerOutcome(client, channel.id, success);
+      await recordCircuitBreakerOutcome(client, channel.id, success, dashboardEvents);
 
       emitDashboard(DASHBOARD_EVENTS.DELIVERY_COMPLETED, {
         notificationId,
