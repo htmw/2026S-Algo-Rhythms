@@ -16,9 +16,9 @@ interface ContentClassificationProps {
 }
 
 function urgencyLevel(value: number): { label: string; color: string; bg: string } {
-  if (value >= 0.8) return { label: 'High', color: 'text-red-700', bg: 'bg-red-100' };
-  if (value >= 0.5) return { label: 'Medium', color: 'text-amber-700', bg: 'bg-amber-100' };
-  return { label: 'Low', color: 'text-green-700', bg: 'bg-green-100' };
+  if (value >= 0.8) return { label: 'High', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/40' };
+  if (value >= 0.5) return { label: 'Medium', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/40' };
+  return { label: 'Low', color: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/40' };
 }
 
 function Badge({ children, className }: { children: ReactNode; className: string }) {
@@ -40,7 +40,7 @@ function highlightKeywords(text: string, keywords: string[]): ReactNode {
     const isMatch = keywords.some((k) => k.toLowerCase() === part.toLowerCase());
     if (isMatch) {
       return (
-        <mark key={i} className="bg-yellow-200 font-semibold rounded px-0.5">
+        <mark key={i} className="bg-yellow-200 dark:bg-yellow-800/50 dark:text-yellow-200 font-semibold rounded px-0.5">
           {part}
         </mark>
       );
@@ -58,7 +58,7 @@ export function ContentClassificationCard({
 
   if (!classification) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-400">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-4 text-sm text-gray-400">
         Classification unavailable
       </div>
     );
@@ -68,24 +68,24 @@ export function ContentClassificationCard({
   const keywords = classification.keywords ?? [];
 
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white ${compact ? 'p-3 text-xs' : 'p-4 text-sm'}`}>
+    <div className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${compact ? 'p-3 text-xs' : 'p-4 text-sm'}`}>
       <div className={`flex flex-wrap items-center ${compact ? 'gap-2' : 'gap-3'}`}>
         <Badge className={`${urgency.bg} ${urgency.color}`}>
           <AlertTriangle className="h-3 w-3" />
           Urgency: {urgency.label} ({classification.urgency.toFixed(2)})
         </Badge>
 
-        <Badge className="bg-blue-100 text-blue-700">
+        <Badge className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400">
           <Tag className="h-3 w-3" />
           {classification.category}
         </Badge>
 
-        <Badge className="bg-purple-100 text-purple-700">
+        <Badge className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400">
           <MessageSquare className="h-3 w-3" />
           {classification.sentiment}
         </Badge>
 
-        <Badge className="bg-gray-100 text-gray-700">
+        <Badge className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
           <Radio className="h-3 w-3" />
           Channel: {classification.optimal_channel_hint}
         </Badge>
@@ -97,7 +97,7 @@ export function ContentClassificationCard({
           {keywords.map((kw) => (
             <span
               key={kw}
-              className="inline-block rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800"
+              className="inline-block rounded bg-yellow-100 dark:bg-yellow-900/40 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:text-yellow-300"
             >
               {kw}
             </span>
@@ -106,7 +106,7 @@ export function ContentClassificationCard({
       )}
 
       {notificationBody && keywords.length > 0 && (
-        <p className={`text-gray-600 leading-relaxed ${compact ? 'mt-2' : 'mt-3'}`}>
+        <p className={`text-gray-600 dark:text-gray-300 leading-relaxed ${compact ? 'mt-2' : 'mt-3'}`}>
           {highlightKeywords(notificationBody, keywords)}
         </p>
       )}
@@ -115,13 +115,13 @@ export function ContentClassificationCard({
         <button
           type="button"
           onClick={() => setReasoningOpen((prev) => !prev)}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
         >
           {reasoningOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           Reasoning
         </button>
         {reasoningOpen && (
-          <p className={`text-gray-600 leading-relaxed ${compact ? 'mt-1' : 'mt-2'}`}>
+          <p className={`text-gray-600 dark:text-gray-300 leading-relaxed ${compact ? 'mt-1' : 'mt-2'}`}>
             {classification.reasoning}
           </p>
         )}

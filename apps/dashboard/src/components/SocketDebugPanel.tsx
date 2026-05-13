@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useDashboardSocket } from '../hooks/useDashboardSocket';
+import { useThemeContext } from '../contexts/ThemeContext.js';
 
 const ALL_EVENTS = [
   'delivery.completed',
@@ -13,6 +14,7 @@ const ALL_EVENTS = [
 
 export function SocketDebugPanel() {
   const { on, status } = useDashboardSocket();
+  const { isDark } = useThemeContext();
 
   useEffect(() => {
     const cleanups = ALL_EVENTS.map((eventName) =>
@@ -23,6 +25,8 @@ export function SocketDebugPanel() {
     return () => cleanups.forEach((off) => off());
   }, [on]);
 
+  const connected = status === 'connected';
+
   return (
     <div style={{
       position: 'fixed',
@@ -31,8 +35,10 @@ export function SocketDebugPanel() {
       padding: '6px 12px',
       borderRadius: 6,
       fontSize: 12,
-      background: status === 'connected' ? '#E1F5EE' : '#FCEBEB',
-      color: status === 'connected' ? '#0F6E56' : '#A32D2D',
+      background: connected
+        ? (isDark ? '#052E16' : '#E1F5EE')
+        : (isDark ? '#450A0A' : '#FCEBEB'),
+      color: connected ? '#0F6E56' : '#A32D2D',
       border: '1px solid currentColor',
       fontFamily: 'monospace',
       zIndex: 9999,

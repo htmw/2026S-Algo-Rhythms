@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useThemeContext } from "../contexts/ThemeContext.js";
 
 interface NotificationCountCardProps {
   label: string;
@@ -17,12 +18,14 @@ export default function NotificationCountCard({
   isLoading = false,
   isError = false,
 }: NotificationCountCardProps) {
+  const { isDark } = useThemeContext();
+
   return (
     <div
       style={{
-        backgroundColor: "white",
+        backgroundColor: isDark ? "#1F2937" : "white",
         borderRadius: "12px",
-        border: "0.5px solid #E5E7EB",
+        border: `0.5px solid ${isDark ? "#374151" : "#E5E7EB"}`,
         padding: "20px",
         display: "flex",
         alignItems: "center",
@@ -49,7 +52,7 @@ export default function NotificationCountCard({
         <div
           style={{
             fontSize: "12px",
-            color: "#6B7280",
+            color: isDark ? "#9CA3AF" : "#6B7280",
             marginBottom: "4px",
             fontWeight: "500",
           }}
@@ -62,7 +65,7 @@ export default function NotificationCountCard({
             style={{
               width: "48px",
               height: "28px",
-              backgroundColor: "#F3F4F6",
+              backgroundColor: isDark ? "#374151" : "#F3F4F6",
               borderRadius: "6px",
               animation: "pulse 1.5s ease-in-out infinite",
             }}
@@ -76,7 +79,7 @@ export default function NotificationCountCard({
             style={{
               fontSize: "26px",
               fontWeight: "700",
-              color: "#111827",
+              color: isDark ? "#F3F4F6" : "#111827",
               lineHeight: 1,
             }}
           >
@@ -88,7 +91,7 @@ export default function NotificationCountCard({
       <div
         style={{
           fontSize: "11px",
-          color: "#9CA3AF",
+          color: isDark ? "#6B7280" : "#9CA3AF",
           alignSelf: "flex-end",
         }}
       >

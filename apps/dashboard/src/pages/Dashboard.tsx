@@ -4,34 +4,19 @@ import { LiveEventFeed } from "../components/LiveEventFeed";
 
 export default function Dashboard() {
   return (
-    <main style={{
-      flex: 1,
-      backgroundColor: "#F9FAFB",
-      padding: "32px",
-      minHeight: "100vh",
-    }}>
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{
-          fontSize: "22px",
-          fontWeight: "700",
-          color: "#111827",
-          margin: 0,
-        }}>
+    <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen">
+      <div className="mb-7">
+        <h1 className="text-[22px] font-bold text-gray-900 dark:text-gray-100">
           Dashboard
         </h1>
-        <p style={{
-          fontSize: "13px",
-          color: "#9CA3AF",
-          marginTop: "4px",
-          margin: "4px 0 0 0",
-        }}>
+        <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1">
           Live updates via Socket.IO
         </p>
       </div>
 
       <NotificationCountRow />
 
-      <div style={{ marginTop: "28px", marginBottom: "28px" }}>
+      <div className="my-7">
         <LiveEventFeed />
       </div>
 

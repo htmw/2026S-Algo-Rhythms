@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../lib/api";
+import { useThemeContext } from "../contexts/ThemeContext.js";
 
 interface RoutingDecision {
   mode: string;
@@ -34,15 +35,14 @@ export default function RoutingIntelligence() {
   const [routing, setRouting] = useState<RoutingDecision | null>(null);
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isDark } = useThemeContext();
 
   useEffect(() => {
     const fetchData = async () => {
-      // Step 1: fetch recent notifications and find one with an adaptive routing decision
       try {
         const notifResp = await apiFetch<{ data: NotificationListItem[] }>("/v1/notifications?limit=20");
         const items = notifResp.data ?? [];
 
-        // Prefer an adaptive decision (has predictions), fall back to any decision
         const adaptive = items.find(
           (n) => n.routing_decision?.mode === "adaptive" && n.routing_decision?.predictions,
         );
@@ -56,7 +56,6 @@ export default function RoutingIntelligence() {
         // API unreachable — page shows empty state
       }
 
-      // Step 2: fetch model info via API proxy (dashboard must not call ml-service directly)
       try {
         const mlResp = await apiFetch<ModelInfo>("/v1/routing/model");
         setModelInfo(mlResp);
@@ -84,39 +83,42 @@ export default function RoutingIntelligence() {
 
   const maxImportance = features.length > 0 ? Math.max(...features.map((f) => f.importance)) : 1;
 
+  const cardBg = isDark ? "#1F2937" : "white";
+  const cardShadow = isDark ? "none" : "0 1px 3px rgba(0,0,0,0.1)";
+  const labelColor = isDark ? "#9CA3AF" : "#6B7280";
+  const valueColor = isDark ? "#F3F4F6" : "#111827";
+  const mutedColor = isDark ? "#6B7280" : "#9CA3AF";
+  const subTextColor = isDark ? "#9CA3AF" : "#374151";
+  const barTrackBg = isDark ? "#374151" : "#F3F4F6";
+  const barInactiveBg = isDark ? "#6B7280" : "#D1D5DB";
+
   if (loading) {
     return (
-      <main style={{ flex: 1, backgroundColor: "#F9FAFB", padding: "32px", minHeight: "100vh" }}>
-        <p style={{ color: "#9CA3AF" }}>Loading routing data...</p>
+      <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen">
+        <p style={{ color: mutedColor }}>Loading routing data...</p>
       </main>
     );
   }
 
   return (
-    <main style={{
-      flex: 1,
-      backgroundColor: "#F9FAFB",
-      padding: "32px",
-      minHeight: "100vh",
-    }}>
-      {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: "700", color: "#111827", margin: 0 }}>
+    <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen">
+      <div className="mb-7">
+        <h1 className="text-[22px] font-bold text-gray-900 dark:text-gray-100">
           Routing Intelligence
         </h1>
-        <p style={{ fontSize: "13px", color: "#9CA3AF", marginTop: "4px" }}>
+        <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1">
           ML-powered channel selection
         </p>
       </div>
 
       {!routing && (
         <div style={{
-          backgroundColor: "white",
+          backgroundColor: cardBg,
           borderRadius: "12px",
           padding: "24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: cardShadow,
           marginBottom: "20px",
-          color: "#6B7280",
+          color: labelColor,
           fontSize: "14px",
         }}>
           No routing decisions yet. Send a notification with routing_mode: adaptive to see data here.
@@ -127,12 +129,12 @@ export default function RoutingIntelligence() {
 
         {/* Selected Channel Card */}
         <div style={{
-          backgroundColor: "white",
+          backgroundColor: cardBg,
           borderRadius: "12px",
           padding: "24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: cardShadow,
         }}>
-          <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "12px", fontWeight: "500" }}>
+          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
             SELECTED CHANNEL
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -151,16 +153,16 @@ export default function RoutingIntelligence() {
               {selectedChannel.charAt(0).toUpperCase()}
             </div>
             <div>
-              <div style={{ fontSize: "24px", fontWeight: "700", color: "#111827", textTransform: "capitalize" }}>
+              <div style={{ fontSize: "24px", fontWeight: "700", color: valueColor, textTransform: "capitalize" }}>
                 {selectedChannel}
               </div>
-              <div style={{ fontSize: "13px", color: "#6B7280" }}>
+              <div style={{ fontSize: "13px", color: labelColor }}>
                 {exploration ? "Exploration (random)" : "Exploitation (model pick)"}
               </div>
             </div>
           </div>
           {reason && (
-            <div style={{ fontSize: "12px", color: "#9CA3AF", marginTop: "12px" }}>
+            <div style={{ fontSize: "12px", color: mutedColor, marginTop: "12px" }}>
               {reason}
             </div>
           )}
@@ -168,12 +170,12 @@ export default function RoutingIntelligence() {
 
         {/* Confidence Score Card */}
         <div style={{
-          backgroundColor: "white",
+          backgroundColor: cardBg,
           borderRadius: "12px",
           padding: "24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: cardShadow,
         }}>
-          <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "12px", fontWeight: "500" }}>
+          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
             PREDICTION SCORES
           </p>
           {routing?.predictions ? (
@@ -185,20 +187,20 @@ export default function RoutingIntelligence() {
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                       <span style={{
                         fontSize: "13px",
-                        color: channel === selectedChannel ? "#111827" : "#6B7280",
+                        color: channel === selectedChannel ? valueColor : labelColor,
                         fontWeight: channel === selectedChannel ? "600" : "400",
                       }}>
                         {channel}
                       </span>
-                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#111827" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "600", color: valueColor }}>
                         {(score * 100).toFixed(1)}%
                       </span>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: "#F3F4F6", borderRadius: "4px", overflow: "hidden" }}>
+                    <div style={{ height: "8px", backgroundColor: barTrackBg, borderRadius: "4px", overflow: "hidden" }}>
                       <div style={{
                         height: "100%",
                         width: `${score * 100}%`,
-                        backgroundColor: channel === selectedChannel ? "#16A34A" : "#D1D5DB",
+                        backgroundColor: channel === selectedChannel ? "#16A34A" : barInactiveBg,
                         borderRadius: "4px",
                         transition: "width 0.6s ease",
                       }} />
@@ -215,22 +217,22 @@ export default function RoutingIntelligence() {
 
         {/* Model Version Card */}
         <div style={{
-          backgroundColor: "white",
+          backgroundColor: cardBg,
           borderRadius: "12px",
           padding: "24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: cardShadow,
         }}>
-          <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "12px", fontWeight: "500" }}>
+          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
             MODEL VERSION
           </p>
-          <div style={{ fontSize: "20px", fontWeight: "700", color: "#111827", wordBreak: "break-all" }}>
+          <div style={{ fontSize: "20px", fontWeight: "700", color: valueColor, wordBreak: "break-all" }}>
             {modelVersion}
           </div>
           {modelInfo?.metrics && (
             <div style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
               {Object.entries(modelInfo.metrics).map(([key, val]) => (
-                <div key={key} style={{ fontSize: "12px", color: "#6B7280" }}>
-                  <span style={{ fontWeight: "600", color: "#374151" }}>{key}:</span>{" "}
+                <div key={key} style={{ fontSize: "12px", color: labelColor }}>
+                  <span style={{ fontWeight: "600", color: subTextColor }}>{key}:</span>{" "}
                   {typeof val === "number" ? val.toFixed(4) : String(val)}
                 </div>
               ))}
@@ -240,7 +242,9 @@ export default function RoutingIntelligence() {
             marginTop: "12px",
             display: "inline-block",
             padding: "4px 10px",
-            backgroundColor: modelInfo?.loaded ? "#EFF6FF" : "#FEF2F2",
+            backgroundColor: modelInfo?.loaded
+              ? (isDark ? "#1E3A5F" : "#EFF6FF")
+              : (isDark ? "#5F1E1E" : "#FEF2F2"),
             color: modelInfo?.loaded ? "#2563EB" : "#DC2626",
             borderRadius: "20px",
             fontSize: "12px",
@@ -252,12 +256,12 @@ export default function RoutingIntelligence() {
 
         {/* Feature Importance Chart */}
         <div style={{
-          backgroundColor: "white",
+          backgroundColor: cardBg,
           borderRadius: "12px",
           padding: "24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: cardShadow,
         }}>
-          <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "16px", fontWeight: "500" }}>
+          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "16px", fontWeight: "500" }}>
             FEATURE IMPORTANCE
           </p>
           {features.length > 0 ? (
@@ -265,14 +269,14 @@ export default function RoutingIntelligence() {
               {features.map((feature) => (
                 <div key={feature.name}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "13px", color: "#374151" }}>{feature.name}</span>
-                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#111827" }}>
+                    <span style={{ fontSize: "13px", color: subTextColor }}>{feature.name}</span>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: valueColor }}>
                       {(feature.importance * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div style={{
                     height: "8px",
-                    backgroundColor: "#F3F4F6",
+                    backgroundColor: barTrackBg,
                     borderRadius: "4px",
                     overflow: "hidden",
                   }}>
@@ -288,7 +292,7 @@ export default function RoutingIntelligence() {
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: "13px", color: "#9CA3AF" }}>
+            <p style={{ fontSize: "13px", color: mutedColor }}>
               No feature importance data available. Train the model first.
             </p>
           )}

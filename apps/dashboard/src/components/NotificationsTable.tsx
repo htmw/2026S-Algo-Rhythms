@@ -1,4 +1,5 @@
 import { useRecentNotifications } from "../hooks/useRecentNotifications";
+import { useThemeContext } from "../contexts/ThemeContext.js";
 
 const statusStyle: Record<string, { bg: string; color: string }> = {
   delivered:  { bg: "#DCFCE7", color: "#15803D" },
@@ -22,15 +23,15 @@ function formatDate(iso: string) {
   });
 }
 
-function SkeletonRow() {
+function SkeletonRow({ isDark }: { isDark: boolean }) {
   return (
-    <tr style={{ borderTop: "0.5px solid #F3F4F6" }}>
+    <tr style={{ borderTop: `0.5px solid ${isDark ? "#374151" : "#F3F4F6"}` }}>
       {[90, 120, 160, 60, 70, 80].map((w, i) => (
         <td key={i} style={{ padding: "14px 20px" }}>
           <div style={{
             width: `${w}px`,
             height: "14px",
-            backgroundColor: "#F3F4F6",
+            backgroundColor: isDark ? "#374151" : "#F3F4F6",
             borderRadius: "4px",
             animation: "pulse 1.5s ease-in-out infinite",
           }} />
@@ -42,27 +43,40 @@ function SkeletonRow() {
 
 export default function NotificationsTable() {
   const { data, isLoading, isError, refetch } = useRecentNotifications();
+  const { isDark } = useThemeContext();
+
+  const containerBg = isDark ? "#1F2937" : "white";
+  const borderColor = isDark ? "#374151" : "#E5E7EB";
+  const dividerColor = isDark ? "#374151" : "#F3F4F6";
+  const headerBg = isDark ? "#111827" : "#F9FAFB";
+  const titleColor = isDark ? "#F3F4F6" : "#111827";
+  const labelColor = isDark ? "#9CA3AF" : "#6B7280";
+  const mutedColor = isDark ? "#6B7280" : "#9CA3AF";
+  const recipientColor = isDark ? "#F3F4F6" : "#111827";
+  const msgColor = isDark ? "#9CA3AF" : "#6B7280";
+  const evenRowBg = isDark ? "#1F2937" : "white";
+  const oddRowBg = isDark ? "#1a2332" : "#FAFAFA";
 
   return (
     <div style={{
-      backgroundColor: "white",
+      backgroundColor: containerBg,
       borderRadius: "12px",
-      border: "0.5px solid #E5E7EB",
+      border: `0.5px solid ${borderColor}`,
       overflow: "hidden",
     }}>
 
       <div style={{
         padding: "16px 20px",
-        borderBottom: "0.5px solid #F3F4F6",
+        borderBottom: `0.5px solid ${dividerColor}`,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
       }}>
         <div>
-          <div style={{ fontSize: "15px", fontWeight: "600", color: "#111827" }}>
+          <div style={{ fontSize: "15px", fontWeight: "600", color: titleColor }}>
             Recent Notifications
           </div>
-          <div style={{ fontSize: "12px", color: "#9CA3AF", marginTop: "2px" }}>
+          <div style={{ fontSize: "12px", color: mutedColor, marginTop: "2px" }}>
             Fetches from GET /v1/notifications · updates every 30s
           </div>
         </div>
@@ -71,8 +85,8 @@ export default function NotificationsTable() {
           style={{
             fontSize: "12px",
             color: "#2563EB",
-            background: "#EFF6FF",
-            border: "0.5px solid #BFDBFE",
+            background: isDark ? "#1E3A5F" : "#EFF6FF",
+            border: `0.5px solid ${isDark ? "#2563EB" : "#BFDBFE"}`,
             borderRadius: "6px",
             padding: "6px 12px",
             cursor: "pointer",
@@ -88,8 +102,8 @@ export default function NotificationsTable() {
           padding: "20px",
           color: "#DC2626",
           fontSize: "13px",
-          background: "#FEF2F2",
-          borderBottom: "0.5px solid #FECACA",
+          background: isDark ? "#3B1111" : "#FEF2F2",
+          borderBottom: `0.5px solid ${isDark ? "#7F1D1D" : "#FECACA"}`,
         }}>
           Failed to load notifications. Check API connection.
         </div>
@@ -103,7 +117,7 @@ export default function NotificationsTable() {
           tableLayout: "fixed",
         }}>
           <thead>
-            <tr style={{ backgroundColor: "#F9FAFB" }}>
+            <tr style={{ backgroundColor: headerBg }}>
               {[
                 { label: "ID",        width: "100px" },
                 { label: "Recipient", width: "150px" },
@@ -117,7 +131,7 @@ export default function NotificationsTable() {
                   textAlign: "left",
                   fontSize: "11px",
                   fontWeight: "600",
-                  color: "#6B7280",
+                  color: labelColor,
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
                   width,
@@ -131,26 +145,26 @@ export default function NotificationsTable() {
           <tbody>
             {isLoading ? (
               <>
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
+                <SkeletonRow isDark={isDark} />
+                <SkeletonRow isDark={isDark} />
+                <SkeletonRow isDark={isDark} />
+                <SkeletonRow isDark={isDark} />
+                <SkeletonRow isDark={isDark} />
               </>
             ) : (
               data?.map((n, i) => (
                 <tr
                   key={n.id}
                   style={{
-                    borderTop: "0.5px solid #F3F4F6",
-                    backgroundColor: i % 2 === 0 ? "white" : "#FAFAFA",
+                    borderTop: `0.5px solid ${dividerColor}`,
+                    backgroundColor: i % 2 === 0 ? evenRowBg : oddRowBg,
                   }}
                 >
                   <td style={{
                     padding: "13px 20px",
                     fontFamily: "monospace",
                     fontSize: "11px",
-                    color: "#9CA3AF",
+                    color: mutedColor,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -160,7 +174,7 @@ export default function NotificationsTable() {
 
                   <td style={{
                     padding: "13px 20px",
-                    color: "#111827",
+                    color: recipientColor,
                     fontWeight: "500",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -171,7 +185,7 @@ export default function NotificationsTable() {
 
                   <td style={{
                     padding: "13px 20px",
-                    color: "#6B7280",
+                    color: msgColor,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -207,7 +221,7 @@ export default function NotificationsTable() {
 
                   <td style={{
                     padding: "13px 20px",
-                    color: "#9CA3AF",
+                    color: mutedColor,
                     fontSize: "11px",
                     whiteSpace: "nowrap",
                   }}>
@@ -222,9 +236,9 @@ export default function NotificationsTable() {
 
       <div style={{
         padding: "10px 20px",
-        borderTop: "0.5px solid #F3F4F6",
+        borderTop: `0.5px solid ${dividerColor}`,
         fontSize: "11px",
-        color: "#9CA3AF",
+        color: mutedColor,
         display: "flex",
         justifyContent: "space-between",
       }}>

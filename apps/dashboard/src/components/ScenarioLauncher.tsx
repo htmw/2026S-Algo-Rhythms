@@ -19,7 +19,7 @@ const SCENARIOS: ScenarioConfig[] = [
     description: 'Flood all personas with critical security alerts. Tests urgency classification and high-priority routing.',
     icon: <ShieldAlert className="h-5 w-5 text-red-600" />,
     borderColor: 'border-l-red-500',
-    iconBg: 'bg-red-50',
+    iconBg: 'bg-red-50 dark:bg-red-900/30',
     defaultCount: 10,
   },
   {
@@ -28,7 +28,7 @@ const SCENARIOS: ScenarioConfig[] = [
     description: 'Send promotional content to all personas. Tests how the model routes low-urgency marketing across channels.',
     icon: <Megaphone className="h-5 w-5 text-blue-600" />,
     borderColor: 'border-l-blue-500',
-    iconBg: 'bg-blue-50',
+    iconBg: 'bg-blue-50 dark:bg-blue-900/30',
     defaultCount: 10,
   },
   {
@@ -37,7 +37,7 @@ const SCENARIOS: ScenarioConfig[] = [
     description: 'Overwhelm email channel to trip the circuit breaker. Tests failover routing behavior.',
     icon: <Zap className="h-5 w-5 text-amber-600" />,
     borderColor: 'border-l-amber-500',
-    iconBg: 'bg-amber-50',
+    iconBg: 'bg-amber-50 dark:bg-amber-900/30',
     defaultCount: 15,
   },
   {
@@ -46,7 +46,7 @@ const SCENARIOS: ScenarioConfig[] = [
     description: 'Send mixed content to fresh personas. Retrain the model after completion to show prediction improvement.',
     icon: <Brain className="h-5 w-5 text-green-600" />,
     borderColor: 'border-l-green-500',
-    iconBg: 'bg-green-50',
+    iconBg: 'bg-green-50 dark:bg-green-900/30',
     defaultCount: 5,
   },
 ];
@@ -118,20 +118,20 @@ function ScenarioCard({ config }: { config: ScenarioConfig }) {
   }
 
   return (
-    <div className={`rounded-lg border border-gray-200 ${config.borderColor} border-l-4 bg-white p-4 text-sm flex flex-col`}>
+    <div className={`rounded-lg border border-gray-200 dark:border-gray-700 ${config.borderColor} border-l-4 bg-white dark:bg-gray-800 p-4 text-sm flex flex-col`}>
       <div className="flex items-center gap-2.5 mb-2">
         <div className={`flex items-center justify-center rounded-md ${config.iconBg} h-8 w-8`}>
           {config.icon}
         </div>
-        <h3 className="text-sm font-semibold text-gray-900">{config.title}</h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{config.title}</h3>
       </div>
 
-      <p className="text-xs text-gray-500 leading-relaxed mb-3">{config.description}</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-3">{config.description}</p>
 
       <div className="mt-auto space-y-2.5">
         <div className="flex items-center gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Count</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Count</label>
             <input
               type="number"
               min={1}
@@ -139,13 +139,13 @@ function ScenarioCard({ config }: { config: ScenarioConfig }) {
               value={state.count}
               onChange={(e) => setState((s) => ({ ...s, count: Math.max(1, Math.min(50, Number(e.target.value) || 1)) }))}
               disabled={state.loading}
-              className="w-16 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              className="w-16 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Speed</label>
-            <div className="flex rounded-md overflow-hidden border border-gray-300">
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Speed</label>
+            <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
               <button
                 type="button"
                 disabled={state.loading}
@@ -153,7 +153,7 @@ function ScenarioCard({ config }: { config: ScenarioConfig }) {
                 className={`px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                   state.speed === 'sequential'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Sequential
@@ -162,10 +162,10 @@ function ScenarioCard({ config }: { config: ScenarioConfig }) {
                 type="button"
                 disabled={state.loading}
                 onClick={() => setState((s) => ({ ...s, speed: 'burst' }))}
-                className={`px-2.5 py-1.5 text-xs font-medium border-l border-gray-300 transition-colors disabled:opacity-50 ${
+                className={`px-2.5 py-1.5 text-xs font-medium border-l border-gray-300 dark:border-gray-600 transition-colors disabled:opacity-50 ${
                   state.speed === 'burst'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Burst
@@ -188,10 +188,10 @@ function ScenarioCard({ config }: { config: ScenarioConfig }) {
         </button>
 
         {state.result && (
-          <p className="text-xs text-green-600 font-medium">{state.result}</p>
+          <p className="text-xs text-green-600 dark:text-green-400 font-medium">{state.result}</p>
         )}
         {state.error && (
-          <p className="text-xs text-red-600">{state.error}</p>
+          <p className="text-xs text-red-600 dark:text-red-400">{state.error}</p>
         )}
       </div>
     </div>
@@ -223,7 +223,7 @@ export function ScenarioLauncher() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-gray-900">Scenario Launcher</h2>
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Scenario Launcher</h2>
 
       <div className="grid grid-cols-2 gap-3">
         {SCENARIOS.map((s) => (
@@ -231,7 +231,7 @@ export function ScenarioLauncher() {
         ))}
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 text-sm">
         <div className="flex items-center gap-3 flex-wrap">
           <button
             type="button"
@@ -248,19 +248,19 @@ export function ScenarioLauncher() {
 
           {retrainResult && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-gray-900">Model {retrainResult.version}</span>
-              <span className="text-sm text-gray-600">AUC: {retrainResult.auc_roc.toFixed(4)}</span>
-              <span className="text-sm text-gray-600">{retrainResult.training_samples} samples</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Model {retrainResult.version}</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">AUC: {retrainResult.auc_roc.toFixed(4)}</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">{retrainResult.training_samples} samples</span>
               {retrainResult.promoted ? (
-                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">Promoted</span>
+                <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/40 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">Promoted</span>
               ) : (
-                <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">Not promoted</span>
+                <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">Not promoted</span>
               )}
             </div>
           )}
 
           {retrainError && (
-            <p className="text-sm text-red-600">{retrainError}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{retrainError}</p>
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useDashboardSocket } from '../hooks/useDashboardSocket';
+import { useThemeContext } from '../contexts/ThemeContext.js';
 
 interface DeliveryCompletedPayload {
   notificationId: string;
@@ -50,7 +51,7 @@ const TYPE_CONFIG = {
   status_changed: { label: 'Updated',   bg: '#F1EFE8', color: '#5F5E5A', dot: '#888780' },
 };
 
-function EventRow({ event }: { event: FeedEvent }) {
+function EventRow({ event, isDark }: { event: FeedEvent; isDark: boolean }) {
   const config = TYPE_CONFIG[event.type];
   const time = new Date(event.timestamp).toLocaleTimeString([], {
     hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -63,7 +64,7 @@ function EventRow({ event }: { event: FeedEvent }) {
       gap: '0 12px',
       alignItems: 'start',
       padding: '10px 16px',
-      borderBottom: '1px solid #F1EFE8',
+      borderBottom: `1px solid ${isDark ? '#374151' : '#F1EFE8'}`,
       animation: 'slideDown 0.2s ease-out',
     }}>
       <div style={{
@@ -78,21 +79,21 @@ function EventRow({ event }: { event: FeedEvent }) {
           }}>
             {config.label}
           </span>
-          <span style={{ fontSize: 13, color: '#3d3d3a', fontWeight: 500 }}>
+          <span style={{ fontSize: 13, color: isDark ? '#E5E7EB' : '#3d3d3a', fontWeight: 500 }}>
             {event.recipient}
           </span>
           {event.channel && (
-            <span style={{ fontSize: 11, color: '#888780' }}>
+            <span style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#888780' }}>
               via {event.channel}
             </span>
           )}
         </div>
-        <div style={{ fontSize: 11, color: '#888780', marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#888780', marginTop: 2 }}>
           {event.detail}
         </div>
       </div>
       <span style={{
-        fontSize: 11, color: '#888780',
+        fontSize: 11, color: isDark ? '#9CA3AF' : '#888780',
         fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
       }}>
         {time}
@@ -105,6 +106,7 @@ export function LiveEventFeed() {
   const { on, status } = useDashboardSocket();
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const counterRef = useRef(0);
+  const { isDark } = useThemeContext();
 
   const addEvent = (event: FeedEvent) => {
     setEvents((prev) => [event, ...prev].slice(0, 100));
@@ -167,12 +169,20 @@ export function LiveEventFeed() {
     return () => { off1(); off2(); off3(); off4(); };
   }, [on]);
 
+  const borderColor = isDark ? '#374151' : '#D3D1C7';
+  const headerBg = isDark ? '#111827' : '#F1EFE8';
+  const containerBg = isDark ? '#1F2937' : '#fff';
+  const titleColor = isDark ? '#E5E7EB' : '#2C2C2A';
+  const mutedColor = isDark ? '#9CA3AF' : '#888780';
+  const clearBorder = isDark ? '#4B5563' : '#B4B2A9';
+  const clearColor = isDark ? '#9CA3AF' : '#5F5E5A';
+
   return (
     <div style={{
-      border: '1px solid #D3D1C7',
+      border: `1px solid ${borderColor}`,
       borderRadius: 12,
       overflow: 'hidden',
-      background: '#fff',
+      background: containerBg,
       fontFamily: 'sans-serif',
     }}>
       <style>{`
@@ -186,11 +196,11 @@ export function LiveEventFeed() {
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between',
         padding: '12px 16px',
-        borderBottom: '1px solid #D3D1C7',
-        background: '#F1EFE8',
+        borderBottom: `1px solid ${borderColor}`,
+        background: headerBg,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: '#2C2C2A' }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: titleColor }}>
             Live event feed
           </span>
           <span style={{
@@ -209,8 +219,8 @@ export function LiveEventFeed() {
             onClick={() => setEvents([])}
             style={{
               fontSize: 11, padding: '2px 8px', borderRadius: 6,
-              border: '1px solid #B4B2A9', background: 'transparent',
-              color: '#5F5E5A', cursor: 'pointer',
+              border: `1px solid ${clearBorder}`, background: 'transparent',
+              color: clearColor, cursor: 'pointer',
             }}
           >
             Clear
@@ -222,21 +232,21 @@ export function LiveEventFeed() {
         {events.length === 0 ? (
           <div style={{
             padding: '40px 16px', textAlign: 'center',
-            color: '#888780', fontSize: 13,
+            color: mutedColor, fontSize: 13,
           }}>
             {status === 'connected'
               ? 'Waiting for events…'
               : 'Not connected to event stream'}
           </div>
         ) : (
-          events.map((event) => <EventRow key={event.id} event={event} />)
+          events.map((event) => <EventRow key={event.id} event={event} isDark={isDark} />)
         )}
       </div>
 
       {events.length > 0 && (
         <div style={{
-          padding: '6px 16px', fontSize: 11, color: '#888780',
-          borderTop: '1px solid #D3D1C7', background: '#F1EFE8',
+          padding: '6px 16px', fontSize: 11, color: mutedColor,
+          borderTop: `1px solid ${borderColor}`, background: headerBg,
         }}>
           {events.length} events · showing most recent first
         </div>
