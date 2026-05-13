@@ -32,7 +32,7 @@ export function SimulationControlPanel() {
         gap: "24px",
       }}>
         <ComposeNotificationForm />
-        {/* SCRUM-239: PredictionRoutingCard */}
+        {/* SCRUM-239: PredictionRoutingCard rendered inline in ComposeNotificationForm after send */}
         {/* SCRUM-240: ScenarioLauncher */}
         {/* SCRUM-241: EngagementResponseDisplay */}
       </div>

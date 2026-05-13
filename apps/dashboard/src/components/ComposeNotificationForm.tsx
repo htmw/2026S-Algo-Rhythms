@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Send, Loader2, RotateCcw } from 'lucide-react';
 import { apiFetch } from '../lib/api.js';
-import { useClassificationPolling, type RawContentClassification } from '../hooks/useClassificationPolling.js';
+import { useNotificationPolling, type RawContentClassification } from '../hooks/useNotificationPolling.js';
 import { ContentClassificationCard } from './ContentClassificationCard.js';
+import { PredictionRoutingCard } from './PredictionRoutingCard.js';
 
 interface ComposeNotificationFormProps {
   onNotificationSent?: (notification: { id: string; status: string }) => void;
@@ -77,7 +78,7 @@ export function ComposeNotificationForm({ onNotificationSent }: ComposeNotificat
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { classification, isPolling, error: pollingError } = useClassificationPolling(notificationId);
+  const { classification, routingDecision, deliveredVia, status, isPolling, error: pollingError } = useNotificationPolling(notificationId);
 
   function handlePersonaChange(value: string) {
     setPersona(value);
@@ -264,6 +265,14 @@ export function ComposeNotificationForm({ onNotificationSent }: ComposeNotificat
             <ContentClassificationCard
               classification={mapClassification(classification)}
               notificationBody={body}
+            />
+          )}
+
+          {routingDecision && (
+            <PredictionRoutingCard
+              routingDecision={routingDecision}
+              deliveredVia={deliveredVia}
+              status={status}
             />
           )}
 
