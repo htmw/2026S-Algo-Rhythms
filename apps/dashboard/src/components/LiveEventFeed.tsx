@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useDashboardSocket } from '../hooks/useDashboardSocket';
-import { useThemeContext } from '../contexts/ThemeContext.js';
 
 interface DeliveryCompletedPayload {
   notificationId: string;
@@ -43,59 +42,42 @@ interface FeedEvent {
   timestamp: string;
 }
 
-const TYPE_CONFIG = {
-  enqueued:       { label: 'Sent',      bg: '#E6F1FB', color: '#185FA5', dot: '#378ADD' },
-  delivered:      { label: 'Delivered', bg: '#E1F5EE', color: '#0F6E56', dot: '#1D9E75' },
-  failed:         { label: 'Failed',    bg: '#FCEBEB', color: '#A32D2D', dot: '#E24B4A' },
-  engaged:        { label: 'Engaged',   bg: '#FAEEDA', color: '#854F0B', dot: '#EF9F27' },
-  status_changed: { label: 'Updated',   bg: '#F1EFE8', color: '#5F5E5A', dot: '#888780' },
+const TYPE_CONFIG: Record<FeedEvent['type'], { label: string; badgeCls: string; dotCls: string }> = {
+  enqueued:       { label: 'Sent',      badgeCls: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400',     dotCls: 'bg-blue-500' },
+  delivered:      { label: 'Delivered', badgeCls: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400', dotCls: 'bg-green-500' },
+  failed:         { label: 'Failed',    badgeCls: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400',         dotCls: 'bg-red-500' },
+  engaged:        { label: 'Engaged',   badgeCls: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400', dotCls: 'bg-amber-500' },
+  status_changed: { label: 'Updated',   badgeCls: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',        dotCls: 'bg-gray-400 dark:bg-gray-500' },
 };
 
-function EventRow({ event, isDark }: { event: FeedEvent; isDark: boolean }) {
+function EventRow({ event }: { event: FeedEvent }) {
   const config = TYPE_CONFIG[event.type];
   const time = new Date(event.timestamp).toLocaleTimeString([], {
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '8px 1fr auto',
-      gap: '0 12px',
-      alignItems: 'start',
-      padding: '10px 16px',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#F1EFE8'}`,
-      animation: 'slideDown 0.2s ease-out',
-    }}>
-      <div style={{
-        width: 8, height: 8, borderRadius: '50%',
-        background: config.dot, marginTop: 5, flexShrink: 0,
-      }} />
+    <div className="grid animate-[slideDown_0.2s_ease-out] border-b border-gray-100 dark:border-gray-700 px-4 py-2.5" style={{ gridTemplateColumns: '8px 1fr auto', gap: '0 12px', alignItems: 'start' }}>
+      <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${config.dotCls}`} />
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: 11, fontWeight: 500, padding: '1px 7px',
-            borderRadius: 999, background: config.bg, color: config.color,
-          }}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-full px-1.5 py-px text-[11px] font-medium ${config.badgeCls}`}>
             {config.label}
           </span>
-          <span style={{ fontSize: 13, color: isDark ? '#E5E7EB' : '#3d3d3a', fontWeight: 500 }}>
+          <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100">
             {event.recipient}
           </span>
           {event.channel && (
-            <span style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#888780' }}>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">
               via {event.channel}
             </span>
           )}
         </div>
-        <div style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#888780', marginTop: 2 }}>
+        <div className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
           {event.detail}
         </div>
       </div>
-      <span style={{
-        fontSize: 11, color: isDark ? '#9CA3AF' : '#888780',
-        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-      }}>
+      <span className="whitespace-nowrap text-[11px] tabular-nums text-gray-400 dark:text-gray-500">
         {time}
       </span>
     </div>
@@ -106,7 +88,6 @@ export function LiveEventFeed() {
   const { on, status } = useDashboardSocket();
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const counterRef = useRef(0);
-  const { isDark } = useThemeContext();
 
   const addEvent = (event: FeedEvent) => {
     setEvents((prev) => [event, ...prev].slice(0, 100));
@@ -169,22 +150,8 @@ export function LiveEventFeed() {
     return () => { off1(); off2(); off3(); off4(); };
   }, [on]);
 
-  const borderColor = isDark ? '#374151' : '#D3D1C7';
-  const headerBg = isDark ? '#111827' : '#F1EFE8';
-  const containerBg = isDark ? '#1F2937' : '#fff';
-  const titleColor = isDark ? '#E5E7EB' : '#2C2C2A';
-  const mutedColor = isDark ? '#9CA3AF' : '#888780';
-  const clearBorder = isDark ? '#4B5563' : '#B4B2A9';
-  const clearColor = isDark ? '#9CA3AF' : '#5F5E5A';
-
   return (
-    <div style={{
-      border: `1px solid ${borderColor}`,
-      borderRadius: 12,
-      overflow: 'hidden',
-      background: containerBg,
-      fontFamily: 'sans-serif',
-    }}>
+    <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       <style>{`
         @keyframes slideDown {
           from { opacity: 0; transform: translateY(-8px); }
@@ -192,62 +159,44 @@ export function LiveEventFeed() {
         }
       `}</style>
 
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 16px',
-        borderBottom: `1px solid ${borderColor}`,
-        background: headerBg,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: titleColor }}>
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
             Live event feed
           </span>
-          <span style={{
-            fontSize: 11, display: 'flex', alignItems: 'center', gap: 5,
-            color: status === 'connected' ? '#0F6E56' : '#A32D2D',
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%', display: 'inline-block',
-              background: status === 'connected' ? '#1D9E75' : '#E24B4A',
-            }} />
+          <span className={`flex items-center gap-1.5 text-[11px] ${
+            status === 'connected' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+          }`}>
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+              status === 'connected' ? 'bg-green-500' : 'bg-red-500'
+            }`} />
             {status === 'connected' ? 'Live' : status}
           </span>
         </div>
         {events.length > 0 && (
           <button
             onClick={() => setEvents([])}
-            style={{
-              fontSize: 11, padding: '2px 8px', borderRadius: 6,
-              border: `1px solid ${clearBorder}`, background: 'transparent',
-              color: clearColor, cursor: 'pointer',
-            }}
+            className="rounded-md border border-gray-300 dark:border-gray-600 bg-transparent px-2 py-0.5 text-[11px] text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             Clear
           </button>
         )}
       </div>
 
-      <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+      <div className="max-h-[400px] overflow-y-auto">
         {events.length === 0 ? (
-          <div style={{
-            padding: '40px 16px', textAlign: 'center',
-            color: mutedColor, fontSize: 13,
-          }}>
+          <div className="py-10 text-center text-[13px] text-gray-400 dark:text-gray-500">
             {status === 'connected'
               ? 'Waiting for events…'
               : 'Not connected to event stream'}
           </div>
         ) : (
-          events.map((event) => <EventRow key={event.id} event={event} isDark={isDark} />)
+          events.map((event) => <EventRow key={event.id} event={event} />)
         )}
       </div>
 
       {events.length > 0 && (
-        <div style={{
-          padding: '6px 16px', fontSize: 11, color: mutedColor,
-          borderTop: `1px solid ${borderColor}`, background: headerBg,
-        }}>
+        <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-1.5 text-[11px] text-gray-400 dark:text-gray-500">
           {events.length} events · showing most recent first
         </div>
       )}

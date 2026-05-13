@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../lib/api";
 import { getApiKey } from "../lib/apiKey";
-import { useThemeContext } from "../contexts/ThemeContext.js";
 
 interface TenantSummary {
   total: number;
@@ -13,7 +12,6 @@ interface TenantSummary {
 
 export default function Tenants() {
   const [summary, setSummary] = useState<TenantSummary | null>(null);
-  const { isDark } = useThemeContext();
   const apiKey = getApiKey();
   const keyPrefix = apiKey ? apiKey.substring(0, 16) + "..." : "not configured";
 
@@ -22,12 +20,6 @@ export default function Tenants() {
       .then(setSummary)
       .catch(() => {});
   }, []);
-
-  const cardBg = isDark ? "#1F2937" : "white";
-  const cardShadow = isDark ? "none" : "0 1px 3px rgba(0,0,0,0.1)";
-  const labelColor = isDark ? "#9CA3AF" : "#6B7280";
-  const valueColor = isDark ? "#F3F4F6" : "#111827";
-  const mutedColor = isDark ? "#6B7280" : "#9CA3AF";
 
   return (
     <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen">
@@ -40,57 +32,41 @@ export default function Tenants() {
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-        }}>
-          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
+      <div className="grid grid-cols-2 gap-5">
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm dark:shadow-none">
+          <p className="mb-3 text-[13px] font-medium text-gray-500 dark:text-gray-400">
             API KEY
           </p>
-          <div style={{
-            fontSize: "16px",
-            fontWeight: "600",
-            color: valueColor,
-            fontFamily: "monospace",
-            wordBreak: "break-all",
-          }}>
+          <div className="break-all font-mono text-base font-semibold text-gray-900 dark:text-gray-100">
             {keyPrefix}
           </div>
-          <div style={{ fontSize: "12px", color: mutedColor, marginTop: "8px" }}>
+          <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
             Configured via VITE_API_KEY environment variable
           </div>
         </div>
 
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-        }}>
-          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm dark:shadow-none">
+          <p className="mb-3 text-[13px] font-medium text-gray-500 dark:text-gray-400">
             NOTIFICATION USAGE
           </p>
           {summary ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Total", value: summary.total, color: valueColor },
-                { label: "Delivered", value: summary.delivered, color: "#15803D" },
-                { label: "Failed", value: summary.failed, color: "#DC2626" },
-                { label: "Queued", value: summary.queued, color: "#A16207" },
+                { label: "Total", value: summary.total, cls: "text-gray-900 dark:text-gray-100" },
+                { label: "Delivered", value: summary.delivered, cls: "text-green-700 dark:text-green-400" },
+                { label: "Failed", value: summary.failed, cls: "text-red-600 dark:text-red-400" },
+                { label: "Queued", value: summary.queued, cls: "text-amber-700 dark:text-amber-400" },
               ].map((stat) => (
                 <div key={stat.label}>
-                  <div style={{ fontSize: "24px", fontWeight: "700", color: stat.color }}>
+                  <div className={`text-2xl font-bold ${stat.cls}`}>
                     {stat.value}
                   </div>
-                  <div style={{ fontSize: "12px", color: labelColor }}>{stat.label}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: "13px", color: mutedColor }}>Loading...</p>
+            <p className="text-[13px] text-gray-400 dark:text-gray-500">Loading...</p>
           )}
         </div>
       </div>

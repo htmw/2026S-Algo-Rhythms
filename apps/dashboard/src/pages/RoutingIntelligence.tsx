@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../lib/api";
-import { useThemeContext } from "../contexts/ThemeContext.js";
 
 interface RoutingDecision {
   mode: string;
@@ -35,7 +34,6 @@ export default function RoutingIntelligence() {
   const [routing, setRouting] = useState<RoutingDecision | null>(null);
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const { isDark } = useThemeContext();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -83,19 +81,10 @@ export default function RoutingIntelligence() {
 
   const maxImportance = features.length > 0 ? Math.max(...features.map((f) => f.importance)) : 1;
 
-  const cardBg = isDark ? "#1F2937" : "white";
-  const cardShadow = isDark ? "none" : "0 1px 3px rgba(0,0,0,0.1)";
-  const labelColor = isDark ? "#9CA3AF" : "#6B7280";
-  const valueColor = isDark ? "#F3F4F6" : "#111827";
-  const mutedColor = isDark ? "#6B7280" : "#9CA3AF";
-  const subTextColor = isDark ? "#9CA3AF" : "#374151";
-  const barTrackBg = isDark ? "#374151" : "#F3F4F6";
-  const barInactiveBg = isDark ? "#6B7280" : "#D1D5DB";
-
   if (loading) {
     return (
       <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen">
-        <p style={{ color: mutedColor }}>Loading routing data...</p>
+        <p className="text-gray-400 dark:text-gray-500">Loading routing data...</p>
       </main>
     );
   }
@@ -112,187 +101,132 @@ export default function RoutingIntelligence() {
       </div>
 
       {!routing && (
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-          marginBottom: "20px",
-          color: labelColor,
-          fontSize: "14px",
-        }}>
+        <div className="mb-5 rounded-xl bg-white dark:bg-gray-800 p-6 text-sm text-gray-500 dark:text-gray-400 shadow-sm dark:shadow-none">
           No routing decisions yet. Send a notification with routing_mode: adaptive to see data here.
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+      <div className="grid grid-cols-2 gap-5">
 
         {/* Selected Channel Card */}
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-        }}>
-          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm dark:shadow-none">
+          <p className="mb-3 text-[13px] font-medium text-gray-500 dark:text-gray-400">
             SELECTED CHANNEL
           </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <div style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "12px",
-              backgroundColor: channelColors[selectedChannel] ?? "#6B7280",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "24px",
-              color: "white",
-              fontWeight: "700",
-            }}>
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-xl text-2xl font-bold text-white"
+              style={{ backgroundColor: channelColors[selectedChannel] ?? "#6B7280" }}
+            >
               {selectedChannel.charAt(0).toUpperCase()}
             </div>
             <div>
-              <div style={{ fontSize: "24px", fontWeight: "700", color: valueColor, textTransform: "capitalize" }}>
+              <div className="text-2xl font-bold capitalize text-gray-900 dark:text-gray-100">
                 {selectedChannel}
               </div>
-              <div style={{ fontSize: "13px", color: labelColor }}>
+              <div className="text-[13px] text-gray-500 dark:text-gray-400">
                 {exploration ? "Exploration (random)" : "Exploitation (model pick)"}
               </div>
             </div>
           </div>
           {reason && (
-            <div style={{ fontSize: "12px", color: mutedColor, marginTop: "12px" }}>
+            <div className="mt-3 text-xs text-gray-400 dark:text-gray-500">
               {reason}
             </div>
           )}
         </div>
 
-        {/* Confidence Score Card */}
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-        }}>
-          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
+        {/* Prediction Scores Card */}
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm dark:shadow-none">
+          <p className="mb-3 text-[13px] font-medium text-gray-500 dark:text-gray-400">
             PREDICTION SCORES
           </p>
           {routing?.predictions ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div className="flex flex-col gap-2.5">
               {Object.entries(routing.predictions)
                 .sort(([, a], [, b]) => b - a)
-                .map(([channel, score]) => (
-                  <div key={channel}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                      <span style={{
-                        fontSize: "13px",
-                        color: channel === selectedChannel ? valueColor : labelColor,
-                        fontWeight: channel === selectedChannel ? "600" : "400",
-                      }}>
-                        {channel}
-                      </span>
-                      <span style={{ fontSize: "13px", fontWeight: "600", color: valueColor }}>
-                        {(score * 100).toFixed(1)}%
-                      </span>
+                .map(([channel, score]) => {
+                  const isSelected = channel === selectedChannel;
+                  return (
+                    <div key={channel}>
+                      <div className="mb-1 flex justify-between">
+                        <span className={`text-[13px] ${isSelected ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
+                          {channel}
+                        </span>
+                        <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                          {(score * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700">
+                        <div
+                          className={`h-full rounded transition-all duration-500 ${isSelected ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-500'}`}
+                          style={{ width: `${score * 100}%` }}
+                        />
+                      </div>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: barTrackBg, borderRadius: "4px", overflow: "hidden" }}>
-                      <div style={{
-                        height: "100%",
-                        width: `${score * 100}%`,
-                        backgroundColor: channel === selectedChannel ? "#16A34A" : barInactiveBg,
-                        borderRadius: "4px",
-                        transition: "width 0.6s ease",
-                      }} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           ) : (
-            <div style={{ fontSize: "40px", fontWeight: "700", color: "#16A34A" }}>
+            <div className="text-[40px] font-bold text-green-600">
               {(confidence * 100).toFixed(0)}%
             </div>
           )}
         </div>
 
         {/* Model Version Card */}
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-        }}>
-          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "12px", fontWeight: "500" }}>
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm dark:shadow-none">
+          <p className="mb-3 text-[13px] font-medium text-gray-500 dark:text-gray-400">
             MODEL VERSION
           </p>
-          <div style={{ fontSize: "20px", fontWeight: "700", color: valueColor, wordBreak: "break-all" }}>
+          <div className="break-all text-xl font-bold text-gray-900 dark:text-gray-100">
             {modelVersion}
           </div>
           {modelInfo?.metrics && (
-            <div style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            <div className="mt-3 flex flex-wrap gap-4">
               {Object.entries(modelInfo.metrics).map(([key, val]) => (
-                <div key={key} style={{ fontSize: "12px", color: labelColor }}>
-                  <span style={{ fontWeight: "600", color: subTextColor }}>{key}:</span>{" "}
+                <div key={key} className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="font-semibold text-gray-600 dark:text-gray-300">{key}:</span>{" "}
                   {typeof val === "number" ? val.toFixed(4) : String(val)}
                 </div>
               ))}
             </div>
           )}
-          <div style={{
-            marginTop: "12px",
-            display: "inline-block",
-            padding: "4px 10px",
-            backgroundColor: modelInfo?.loaded
-              ? (isDark ? "#1E3A5F" : "#EFF6FF")
-              : (isDark ? "#5F1E1E" : "#FEF2F2"),
-            color: modelInfo?.loaded ? "#2563EB" : "#DC2626",
-            borderRadius: "20px",
-            fontSize: "12px",
-            fontWeight: "600",
-          }}>
+          <div className={`mt-3 inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
+            modelInfo?.loaded
+              ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
+              : 'bg-red-50 dark:bg-red-900/40 text-red-600 dark:text-red-400'
+          }`}>
             {modelInfo?.loaded ? "Active" : "Not loaded"}
           </div>
         </div>
 
         {/* Feature Importance Chart */}
-        <div style={{
-          backgroundColor: cardBg,
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: cardShadow,
-        }}>
-          <p style={{ fontSize: "13px", color: labelColor, marginBottom: "16px", fontWeight: "500" }}>
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm dark:shadow-none">
+          <p className="mb-4 text-[13px] font-medium text-gray-500 dark:text-gray-400">
             FEATURE IMPORTANCE
           </p>
           {features.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div className="flex flex-col gap-3">
               {features.map((feature) => (
                 <div key={feature.name}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "13px", color: subTextColor }}>{feature.name}</span>
-                    <span style={{ fontSize: "13px", fontWeight: "600", color: valueColor }}>
+                  <div className="mb-1 flex justify-between">
+                    <span className="text-[13px] text-gray-600 dark:text-gray-300">{feature.name}</span>
+                    <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
                       {(feature.importance * 100).toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{
-                    height: "8px",
-                    backgroundColor: barTrackBg,
-                    borderRadius: "4px",
-                    overflow: "hidden",
-                  }}>
-                    <div style={{
-                      height: "100%",
-                      width: `${(feature.importance / maxImportance) * 100}%`,
-                      backgroundColor: "#2563EB",
-                      borderRadius: "4px",
-                      transition: "width 0.6s ease",
-                    }} />
+                  <div className="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700">
+                    <div
+                      className="h-full rounded bg-blue-600 transition-all duration-500"
+                      style={{ width: `${(feature.importance / maxImportance) * 100}%` }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: "13px", color: mutedColor }}>
+            <p className="text-[13px] text-gray-400 dark:text-gray-500">
               No feature importance data available. Train the model first.
             </p>
           )}
