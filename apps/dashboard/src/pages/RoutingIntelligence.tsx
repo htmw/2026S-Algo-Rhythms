@@ -105,7 +105,7 @@ export default function RoutingIntelligence() {
           Routing Intelligence
         </h1>
         <p style={{ fontSize: "13px", color: "#9CA3AF", marginTop: "4px" }}>
-          Sprint 2 · ML-powered channel selection
+          ML-powered channel selection
         </p>
       </div>
 

@@ -22,7 +22,7 @@ export default function Notifications() {
           color: "#9CA3AF",
           margin: "4px 0 0 0",
         }}>
-          Sprint 2 · All notifications for this tenant
+          All notifications for this tenant
         </p>
       </div>
 
