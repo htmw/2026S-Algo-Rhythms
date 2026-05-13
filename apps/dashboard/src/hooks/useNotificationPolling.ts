@@ -12,21 +12,39 @@ export interface RawContentClassification {
   category_encoded?: number;
 }
 
-interface UseClassificationPollingResult {
+export interface RawRoutingDecision {
+  mode: 'adaptive' | 'static';
+  reason: string;
+  selected: 'email' | 'websocket' | 'webhook';
+  exploration: boolean;
+  predictions: Record<string, number>;
+  model_version: string;
+}
+
+interface UseNotificationPollingResult {
   classification: RawContentClassification | null;
+  routingDecision: RawRoutingDecision | null;
+  deliveredVia: string | null;
+  status: string | null;
   isPolling: boolean;
   error: string | null;
 }
 
 interface NotificationPollResponse {
   content_classification: RawContentClassification | null;
+  routing_decision: RawRoutingDecision | null;
+  delivered_via?: string | null;
+  status?: string | null;
 }
 
 const MAX_ATTEMPTS = 20;
 const POLL_INTERVAL_MS = 1500;
 
-export function useClassificationPolling(notificationId: string | null): UseClassificationPollingResult {
+export function useNotificationPolling(notificationId: string | null): UseNotificationPollingResult {
   const [classification, setClassification] = useState<RawContentClassification | null>(null);
+  const [routingDecision, setRoutingDecision] = useState<RawRoutingDecision | null>(null);
+  const [deliveredVia, setDeliveredVia] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const attemptRef = useRef(0);
@@ -34,6 +52,9 @@ export function useClassificationPolling(notificationId: string | null): UseClas
   useEffect(() => {
     if (!notificationId) {
       setClassification(null);
+      setRoutingDecision(null);
+      setDeliveredVia(null);
+      setStatus(null);
       setIsPolling(false);
       setError(null);
       attemptRef.current = 0;
@@ -41,6 +62,9 @@ export function useClassificationPolling(notificationId: string | null): UseClas
     }
 
     setClassification(null);
+    setRoutingDecision(null);
+    setDeliveredVia(null);
+    setStatus(null);
     setError(null);
     setIsPolling(true);
     attemptRef.current = 0;
@@ -52,12 +76,15 @@ export function useClassificationPolling(notificationId: string | null): UseClas
         const data = await apiFetch<NotificationPollResponse>(`/v1/notifications/${notificationId}`);
         if (data.content_classification) {
           setClassification(data.content_classification);
+          setRoutingDecision(data.routing_decision ?? null);
+          setDeliveredVia(data.delivered_via ?? null);
+          setStatus(data.status ?? null);
           setIsPolling(false);
           clearInterval(intervalId);
           return;
         }
       } catch (err) {
-        console.warn(`Classification poll attempt ${attemptRef.current} failed:`, err);
+        console.warn(`Notification poll attempt ${attemptRef.current} failed:`, err);
       }
 
       if (attemptRef.current >= MAX_ATTEMPTS) {
@@ -73,5 +100,5 @@ export function useClassificationPolling(notificationId: string | null): UseClas
     };
   }, [notificationId]);
 
-  return { classification, isPolling, error };
+  return { classification, routingDecision, deliveredVia, status, isPolling, error };
 }

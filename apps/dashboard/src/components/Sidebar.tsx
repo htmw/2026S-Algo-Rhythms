@@ -72,10 +72,7 @@ export default function Sidebar() {
       <div style={{
         padding: "16px 24px",
         borderTop: "1px solid #374151",
-        fontSize: "12px",
-        color: "#6B7280",
       }}>
-        Sprint 2 · Mar 26 – Apr 16
       </div>
     </aside>
   );
