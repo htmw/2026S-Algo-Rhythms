@@ -476,7 +476,8 @@ export async function processNotification(
             } else {
               await client.query(
                 `UPDATE delivery_attempts
-                 SET engagement_reason = $2
+                 SET engaged = false,
+                     engagement_reason = $2
                  WHERE notification_id = $1`,
                 [notificationId, decision.reason],
               );
