@@ -12,6 +12,11 @@ const { mockPoolConnect, mockDeliverEmail, mockPredictChannel, mockClassifyConte
   mockClassifyContent: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock('../src/circuitBreaker.js', () => ({
+  shouldAllowChannelProbe: vi.fn().mockResolvedValue(true),
+  recordCircuitBreakerOutcome: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../src/db.js', () => ({
   pool: { connect: mockPoolConnect },
 }));
