@@ -13,8 +13,8 @@ export async function deliverSmsMock(
   try {
     logger.info(
       {
-        recipient,
-        body,
+        recipient: recipient.substring(0, 3) + '***',
+        bodyLength: body.length,
         channel: 'sms_webhook',
       },
       'Mock SMS delivered',
