@@ -25,6 +25,7 @@ def load_settings() -> Settings:
         model_path=Path(os.environ.get("MODEL_PATH", "/app/models/active/latest.joblib")),
         bootstrap_samples=int(os.environ.get("ML_BOOTSTRAP_SAMPLES", "10000")),
         default_exploration_rate=float(os.environ.get("ML_DEFAULT_EXPLORATION_RATE", "0.10")),
+        min_training_samples=int(os.environ.get("MIN_RETRAIN_SAMPLES", "500")),
     )
 
 
