@@ -94,6 +94,7 @@ simulationRouter.post('/run', async (req: Request, res: Response): Promise<void>
       });
       recipients.push(recipientId);
       queued++;
+      await new Promise(resolve => setTimeout(resolve, 1500));
     } catch (err) {
       logger.error({ err, requestId, tenantId, recipientId }, 'Failed to enqueue simulated notification');
     }
