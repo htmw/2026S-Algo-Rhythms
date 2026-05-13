@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../lib/api.js';
 
-export interface RawRawContentClassification {
+export interface RawContentClassification {
   urgency_score: number;
   category: string;
   time_sensitivity_score: number;
