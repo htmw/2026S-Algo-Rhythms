@@ -32,7 +32,7 @@ if echo "$STAGED_FILES" | grep -qE '^\.env$|^\.env\.local$|^\.env\.production$';
 fi
 
 # Check for ANTHROPIC_API_KEY references in staged files
-if git diff --cached --name-only | xargs grep -l "ANTHROPIC_API_KEY" 2>/dev/null | grep -v ".gitignore" | grep -v ".sh" | grep -v "contentClassification.ts" | grep -v "contentClassification.test.ts" | grep -v "pre-commit"; then
+if git diff --cached --name-only | xargs grep -l "ANTHROPIC_API_KEY" 2>/dev/null | grep -v ".gitignore" | grep -v ".sh" | grep -v "contentClassification.ts" | grep -v "contentClassification.test.ts" | grep -v "engagementSimulator.ts" | grep -v "pre-commit"; then
     echo "ERROR: ANTHROPIC_API_KEY reference found in staged files"
     exit 1
 fi

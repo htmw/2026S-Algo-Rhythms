@@ -20,6 +20,7 @@ import {
   type RoutingDecisionRecord,
 } from './routingDecision.js';
 import { classifyContent } from './services/contentClassification.js';
+import { simulateEngagement } from './simulation/engagementSimulator.js';
 import type { DashboardEventPublisher } from './dashboardEvents.js';
 import { maskEmail } from './dashboardEvents.js';
 
@@ -383,6 +384,74 @@ export async function processNotification(
           timestamp: new Date().toISOString(),
         });
         log.info({ channelType: channel.type, durationMs }, 'Notification delivered');
+
+        try {
+          const now = new Date();
+          const decision = await simulateEngagement({
+            recipientId: notification.recipient,
+            channel: channel.type,
+            subject: notification.subject ?? '',
+            body: notification.body,
+            contentClassification: notification.content_classification as Record<string, unknown> | null,
+            hourOfDay: now.getHours(),
+            dayOfWeek: now.getDay() === 0 ? 6 : now.getDay() - 1,
+            isWeekend: now.getDay() === 0 || now.getDay() === 6,
+          });
+
+          if (decision) {
+            log.info(
+              { recipientId: notification.recipient, engaged: decision.engaged, channel: channel.type },
+              'Engagement simulated for %s: engaged=%s, channel=%s',
+              notification.recipient, decision.engaged, channel.type,
+            );
+
+            if (decision.engaged) {
+              await client.query(
+                `UPDATE delivery_attempts
+                 SET engaged = true,
+                     engaged_at = NOW(),
+                     engagement_type = 'simulated',
+                     engagement_reason = $2
+                 WHERE notification_id = $1
+                   AND engaged IS NOT TRUE`,
+                [notificationId, decision.reason],
+              );
+
+              await client.query(
+                `INSERT INTO recipient_channel_stats (
+                   tenant_id, recipient, channel_type,
+                   attempts_30d, successes_30d, engagements_30d,
+                   last_engaged_at, updated_at
+                 )
+                 VALUES ($1, $2, $3, 0, 0, 1, NOW(), NOW())
+                 ON CONFLICT (tenant_id, recipient, channel_type)
+                 DO UPDATE SET
+                   engagements_30d = recipient_channel_stats.engagements_30d + 1,
+                   last_engaged_at = NOW(),
+                   updated_at = NOW()`,
+                [tenantId, notification.recipient, channel.type],
+              );
+
+              emitDashboard(DASHBOARD_EVENTS.ENGAGEMENT_RECORDED, {
+                notificationId,
+                recipient: maskEmail(notification.recipient),
+                channel: channel.type,
+                engagementType: 'simulated',
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              await client.query(
+                `UPDATE delivery_attempts
+                 SET engagement_reason = $2
+                 WHERE notification_id = $1`,
+                [notificationId, decision.reason],
+              );
+            }
+          }
+        } catch (simErr) {
+          log.warn({ err: simErr }, 'Engagement simulation error (non-fatal)');
+        }
+
         return;
       }
 
