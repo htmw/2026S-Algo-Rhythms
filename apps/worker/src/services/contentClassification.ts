@@ -27,6 +27,11 @@ function validate(obj: unknown): ContentClassification | null {
   if (typeof o.optimal_channel_hint !== 'string' || !VALID_CHANNELS.includes(o.optimal_channel_hint as typeof VALID_CHANNELS[number])) return null;
   if (typeof o.reasoning !== 'string') return null;
 
+  let keywords: string[] = [];
+  if (Array.isArray(o.keywords) && o.keywords.every((k: unknown) => typeof k === 'string')) {
+    keywords = o.keywords as string[];
+  }
+
   return {
     urgency_score: o.urgency_score,
     category: o.category,
@@ -35,6 +40,7 @@ function validate(obj: unknown): ContentClassification | null {
     sentiment_score: o.sentiment_score,
     optimal_channel_hint: o.optimal_channel_hint,
     reasoning: o.reasoning,
+    keywords,
   };
 }
 
@@ -47,7 +53,8 @@ const SYSTEM_PROMPT = `You are a notification content classifier. Analyze the no
   "time_sensitivity_score": <number 0-1, where 1 is most time-sensitive>,
   "sentiment_score": <number 0-1, where 0 is most negative and 1 is most positive>,
   "optimal_channel_hint": <one of "email", "sms_webhook", "websocket", "webhook">,
-  "reasoning": <brief explanation of your classification>
+  "reasoning": <brief explanation of your classification>,
+  "keywords": <array of 3-5 key terms from the notification content that drove the classification decision>
 }
 
 Return ONLY the JSON object. No markdown, no code fences, no extra text.`;
