@@ -1,4 +1,5 @@
 import { ComposeNotificationForm } from '../components/ComposeNotificationForm.js';
+import { ScenarioLauncher } from '../components/ScenarioLauncher.js';
 
 export function SimulationControlPanel() {
   return (
@@ -33,8 +34,8 @@ export function SimulationControlPanel() {
       }}>
         <ComposeNotificationForm />
         {/* SCRUM-239: PredictionRoutingCard rendered inline in ComposeNotificationForm after send */}
-        {/* SCRUM-240: ScenarioLauncher */}
         {/* SCRUM-241: EngagementResponseCard rendered inline in ComposeNotificationForm after send */}
+        <ScenarioLauncher />
       </div>
     </main>
   );
