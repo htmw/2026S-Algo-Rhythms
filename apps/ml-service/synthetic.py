@@ -40,7 +40,19 @@ def choose_engagement(profile: str, channel: str) -> bool:
     return random.random() < 0.3
 
 
+_CATEGORY_DISTRIBUTIONS = {
+    0: {"urgency": (0.1, 0.3), "time_sens": (0.2, 0.6), "sentiment": (0.6, 0.9)},
+    1: {"urgency": (0.4, 0.7), "time_sens": (0.3, 0.6), "sentiment": (0.4, 0.6)},
+    2: {"urgency": (0.8, 1.0), "time_sens": (0.7, 1.0), "sentiment": (0.2, 0.5)},
+    3: {"urgency": (0.3, 0.6), "time_sens": (0.2, 0.5), "sentiment": (0.4, 0.6)},
+    4: {"urgency": (0.1, 0.4), "time_sens": (0.1, 0.4), "sentiment": (0.5, 0.8)},
+    5: {"urgency": (0.5, 0.8), "time_sens": (0.4, 0.7), "sentiment": (0.3, 0.5)},
+}
+
+
 def build_feature_vector(profile: str, channel: str) -> dict:
+    category = random.randint(0, 5)
+    cat = _CATEGORY_DISTRIBUTIONS[category]
     return {
         "profile": profile,
         "channel_type": channel,
@@ -58,10 +70,10 @@ def build_feature_vector(profile: str, channel: str) -> dict:
         "notification_priority_score": random.choice([1, 2, 3, 4]),
         "content_length": random.randint(20, 500),
         "channel_health": round(random.uniform(0.7, 1.0), 2),
-        "urgency_score": round(random.random(), 3),
-        "category_encoded": random.randint(0, 4),
-        "time_sensitivity_score": round(random.random(), 3),
-        "sentiment_score": round(random.random(), 3),
+        "urgency_score": round(random.uniform(*cat["urgency"]), 3),
+        "category_encoded": category,
+        "time_sensitivity_score": round(random.uniform(*cat["time_sens"]), 3),
+        "sentiment_score": round(random.uniform(*cat["sentiment"]), 3),
     }
 
 
