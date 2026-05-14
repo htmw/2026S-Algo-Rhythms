@@ -15,6 +15,7 @@ class Settings:
     # Training phase thresholds (spec 5.6)
     min_training_samples: int = 500
     mature_threshold: int = 2000
+    min_auc_threshold: float = 0.55
     cold_start_exploration: float = 0.50
     initial_exploration: float = 0.20
     mature_exploration: float = 0.10
@@ -26,6 +27,7 @@ def load_settings() -> Settings:
         bootstrap_samples=int(os.environ.get("ML_BOOTSTRAP_SAMPLES", "10000")),
         default_exploration_rate=float(os.environ.get("ML_DEFAULT_EXPLORATION_RATE", "0.10")),
         min_training_samples=int(os.environ.get("MIN_RETRAIN_SAMPLES", "500")),
+        min_auc_threshold=float(os.environ.get("ML_MIN_AUC_THRESHOLD", "0.55")),
     )
 
 

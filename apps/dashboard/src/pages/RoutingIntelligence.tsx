@@ -69,7 +69,7 @@ export default function RoutingIntelligence() {
 
   const selectedChannel = routing?.selected ?? "—";
   const confidence = routing?.predictions?.[selectedChannel] ?? 0;
-  const modelVersion = routing?.model_version ?? modelInfo?.version ?? "—";
+  const modelVersion = modelInfo?.version ?? routing?.model_version ?? "—";
   const exploration = routing?.exploration ?? false;
   const reason = routing?.reason ?? "";
 
