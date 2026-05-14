@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import {
   extractFeatures,
   type CircuitState,
+  type ContentClassification,
   type FeatureVector,
   type RecipientChannelStatsRow,
 } from './features.js';
@@ -18,12 +19,17 @@ import {
   buildStaticDecision,
   type RoutingDecisionRecord,
 } from './routingDecision.js';
+import { classifyContent } from './services/contentClassification.js';
+import pLimit from 'p-limit';
+import { simulateEngagement } from './simulation/engagementSimulator.js';
 import type { DashboardEventPublisher } from './dashboardEvents.js';
 import { maskEmail } from './dashboardEvents.js';
 import {
   recordCircuitBreakerOutcome,
   shouldAllowChannelProbe,
 } from './circuitBreaker.js';
+
+const simulationLimit = pLimit(1);
 
 interface ChannelRow {
   id: string;
@@ -39,6 +45,7 @@ interface NotificationRow {
   subject: string | null;
   body: string;
   body_html: string | null;
+  content_classification: ContentClassification | null;
 }
 
 interface StatsRow extends RecipientChannelStatsRow {
@@ -91,7 +98,7 @@ export async function processNotification(
     });
 
     const notifResult = await client.query<NotificationRow>(
-      `SELECT recipient, subject, body, body_html FROM notifications WHERE id = $1`,
+      `SELECT recipient, subject, body, body_html, content_classification FROM notifications WHERE id = $1`,
       [notificationId],
     );
 
@@ -99,6 +106,20 @@ export async function processNotification(
     if (!notification) {
       log.error('Notification not found in database');
       throw new Error(`Notification ${notificationId} not found`);
+    }
+
+    if (!notification.content_classification) {
+      const classification = await classifyContent(
+        notification.subject ?? '',
+        notification.body,
+      );
+      if (classification) {
+        notification.content_classification = classification;
+        await client.query(
+          `UPDATE notifications SET content_classification = $2::jsonb, updated_at = NOW() WHERE id = $1`,
+          [notificationId, JSON.stringify(classification)],
+        );
+      }
     }
 
     const routingMode = deriveRoutingMode(job.data);
@@ -173,6 +194,7 @@ export async function processNotification(
           bodyLength: notification.body.length,
           circuitState: channel.circuit_state,
           stats: statsByChannel.get(channel.type) ?? null,
+          contentClassification: notification.content_classification,
         }),
       );
     }
@@ -357,7 +379,7 @@ export async function processNotification(
         throw txErr;
       }
 
-      await recordCircuitBreakerOutcome(client, channel.id, success);
+      await recordCircuitBreakerOutcome(client, channel.id, success, dashboardEvents);
 
       emitDashboard(DASHBOARD_EVENTS.DELIVERY_COMPLETED, {
         notificationId,
@@ -393,6 +415,75 @@ export async function processNotification(
         });
 
         log.info({ channelType: channel.type, durationMs }, 'Notification delivered');
+
+        try {
+          const now = new Date();
+          const decision = await simulationLimit(() => simulateEngagement({
+            recipientId: notification.recipient,
+            channel: channel.type,
+            subject: notification.subject ?? '',
+            body: notification.body,
+            contentClassification: notification.content_classification as Record<string, unknown> | null,
+            hourOfDay: now.getHours(),
+            dayOfWeek: now.getDay() === 0 ? 6 : now.getDay() - 1,
+            isWeekend: now.getDay() === 0 || now.getDay() === 6,
+          }));
+
+          if (decision) {
+            log.info(
+              { recipientId: notification.recipient, engaged: decision.engaged, channel: channel.type },
+              'Engagement simulated for %s: engaged=%s, channel=%s',
+              notification.recipient, decision.engaged, channel.type,
+            );
+
+            if (decision.engaged) {
+              await client.query(
+                `UPDATE delivery_attempts
+                 SET engaged = true,
+                     engaged_at = NOW(),
+                     engagement_type = 'simulated',
+                     engagement_reason = $2
+                 WHERE notification_id = $1
+                   AND engaged IS NOT TRUE`,
+                [notificationId, decision.reason],
+              );
+
+              await client.query(
+                `INSERT INTO recipient_channel_stats (
+                   tenant_id, recipient, channel_type,
+                   attempts_30d, successes_30d, engagements_30d,
+                   last_engaged_at, updated_at
+                 )
+                 VALUES ($1, $2, $3, 0, 0, 1, NOW(), NOW())
+                 ON CONFLICT (tenant_id, recipient, channel_type)
+                 DO UPDATE SET
+                   engagements_30d = recipient_channel_stats.engagements_30d + 1,
+                   last_engaged_at = NOW(),
+                   updated_at = NOW()`,
+                [tenantId, notification.recipient, channel.type],
+              );
+
+              emitDashboard(DASHBOARD_EVENTS.ENGAGEMENT_RECORDED, {
+                notificationId,
+                recipient: maskEmail(notification.recipient),
+                channel: channel.type,
+                engagementType: 'simulated',
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              await client.query(
+                `UPDATE delivery_attempts
+                 SET engaged = false,
+                     engagement_reason = $2
+                 WHERE notification_id = $1`,
+                [notificationId, decision.reason],
+              );
+            }
+          }
+        } catch (simErr) {
+          log.warn({ err: simErr }, 'Engagement simulation error (non-fatal)');
+        }
+
         return;
       }
 

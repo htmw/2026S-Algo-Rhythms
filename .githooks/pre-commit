@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Patterns that should NEVER appear in committed code
+FORBIDDEN_PATTERNS=(
+    'ne_live_[a-zA-Z0-9]'         # Production API keys
+    'ne_test_[a-zA-Z0-9]{16}'     # Test API keys (real ones, not examples)
+    'sk_live_'                     # Stripe-style live keys
+    'password\s*=\s*"[^"]{8,}'    # Hardcoded passwords
+    'AKIA[0-9A-Z]{16}'            # AWS access keys
+    'smtp\.gmail\.com'            # Gmail SMTP (use Mailpit for dev)
+    'BEGIN RSA PRIVATE KEY'        # Private keys
+    'BEGIN OPENSSH PRIVATE KEY'    # SSH keys
+)
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+for file in $STAGED_FILES; do
+    for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+        if grep -qP "$pattern" "$file" 2>/dev/null; then
+            echo "❌ SECURITY: Forbidden pattern found in $file"
+            echo "   Pattern: $pattern"
+            echo "   Commit blocked. Remove the secret and use environment variables."
+            exit 1
+        fi
+    done
+done
+
+# Check for .env files being committed
+if echo "$STAGED_FILES" | grep -qE '^\.env$|^\.env\.local$|^\.env\.production$'; then
+    echo "❌ SECURITY: .env file staged for commit. This is not allowed."
+    exit 1
+fi
+
+# Check for ANTHROPIC_API_KEY references in staged files
+if git diff --cached --name-only | xargs grep -l "ANTHROPIC_API_KEY" 2>/dev/null | grep -v ".gitignore" | grep -v ".sh" | grep -v "contentClassification.ts" | grep -v "contentClassification.test.ts" | grep -v "engagementSimulator.ts" | grep -v "pre-commit"; then
+    echo "ERROR: ANTHROPIC_API_KEY reference found in staged files"
+    exit 1
+fi
+
+echo "✅ Security check passed"

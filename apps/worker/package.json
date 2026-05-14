@@ -10,11 +10,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "@notifyengine/shared": "*",
     "bullmq": "^5.0.0",
     "dotenv": "^17.4.1",
     "ioredis": "^5.9.3",
     "nodemailer": "^8.0.0",
+    "p-limit": "^3.1.0",
     "pg": "^8.13.0",
     "pino": "^9.0.0"
   },

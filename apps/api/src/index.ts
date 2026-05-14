@@ -12,6 +12,8 @@ import { notificationRouter } from './routes/notifications.js';
 import { tenantRouter } from './routes/tenants.js';
 import { engagementRouter } from './routes/engagement.js';
 import { routingRouter } from './routes/routing.js';
+import { simulationRouter } from './routes/simulation.js';
+import { modelRouter } from './routes/model.js';
 import { registerDashboardNamespace } from './socket/dashboardNamespace.js';
 import { startDashboardBridge } from './socket/dashboardBridge.js';
 import { initApiEmitter } from './socket/apiEmitter.js';
@@ -38,6 +40,8 @@ app.use('/v1/engagement', engagementRouter);
 // Protected routes
 app.use('/v1/notifications', authMiddleware, rateLimitMiddleware, notificationRouter);
 app.use('/v1/routing', authMiddleware, rateLimitMiddleware, routingRouter);
+app.use('/v1/simulation', authMiddleware, rateLimitMiddleware, simulationRouter);
+app.use('/v1/model', authMiddleware, rateLimitMiddleware, modelRouter);
 
 const httpServer = http.createServer(app);
 

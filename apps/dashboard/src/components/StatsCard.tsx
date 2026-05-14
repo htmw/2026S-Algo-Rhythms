@@ -7,30 +7,16 @@ interface StatsCardProps {
 
 export default function StatsCard({ label, value, icon, bgColor }: StatsCardProps) {
   return (
-    <div style={{
-      backgroundColor: "white",
-      borderRadius: "12px",
-      border: "1px solid #F3F4F6",
-      padding: "20px",
-      display: "flex",
-      alignItems: "center",
-      gap: "16px",
-    }}>
-      <div style={{
-        width: "48px",
-        height: "48px",
-        borderRadius: "10px",
-        backgroundColor: bgColor,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "22px",
-      }}>
+    <div className="flex items-center gap-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+      <div
+        className="flex h-12 w-12 items-center justify-center rounded-[10px] text-[22px]"
+        style={{ backgroundColor: bgColor }}
+      >
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: "13px", color: "#6B7280" }}>{label}</div>
-        <div style={{ fontSize: "24px", fontWeight: "700", color: "#111827" }}>{value}</div>
+        <div className="text-[13px] text-gray-500 dark:text-gray-400">{label}</div>
+        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</div>
       </div>
     </div>
   );

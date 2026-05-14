@@ -8,6 +8,7 @@
 .env
 .env.*
 !.env.example
+# Anthropic API key lives in .env only - never commit
 
 # =====================
 # CLAUDE PROJECT DOCS
@@ -160,16 +161,8 @@ playwright-report/
 .cache/
 apps/dashboard/.vite/
 
-# Local test scripts
 scripts/
 
 # ML model artifacts
 apps/ml-service/models/
-
-# Local demo and test scripts
-scripts/demo*.sh
-scripts/test-*.sh
-scripts/local-*.sh
-scripts/collect-*.sh
-scripts/verify-*.sh
 ~$*

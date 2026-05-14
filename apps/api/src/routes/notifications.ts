@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { RETRY_CONFIG, DASHBOARD_EVENTS } from '@notifyengine/shared';
-import type { NotificationJob, NotificationPriority } from '@notifyengine/shared';
+import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import { SendNotificationSchema, ListNotificationsQuerySchema } from '../schemas/notification.js';
 import type { ListNotificationsQuery } from '../schemas/notification.js';
-import { getNotificationQueue } from '../queue.js';
+import { createAndEnqueueNotification, QueueUnavailableError } from '../services/notificationService.js';
 import { logger } from '../logger.js';
 import { emitDashboardEvent, maskEmail } from '../socket/apiEmitter.js';
 
@@ -71,33 +70,37 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
 
   let notificationId: string;
   let createdAt: string;
+  let priority: string;
+  let routingMode: string;
 
   try {
-    const result = await dbClient.query(
-      `INSERT INTO notifications (
-         tenant_id, idempotency_key, recipient, subject, body, body_html,
-         priority, routing_mode, channel_preference, force_channel, metadata, status
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
-       RETURNING id, created_at`,
-      [
-        tenantId,
-        idempotencyKey || null,
-        parsed.recipient,
-        parsed.subject || null,
-        parsed.body,
-        parsed.body_html || null,
-        parsed.priority,
-        parsed.routing_mode,
-        parsed.channel_preference || null,
-        parsed.force_channel || null,
-        parsed.metadata ? JSON.stringify(parsed.metadata) : '{}',
-      ],
-    );
-
-    notificationId = result.rows[0].id;
-    createdAt = result.rows[0].created_at;
+    const result = await createAndEnqueueNotification(dbClient, {
+      tenantId,
+      recipient: parsed.recipient,
+      subject: parsed.subject,
+      body: parsed.body,
+      bodyHtml: parsed.body_html,
+      priority: parsed.priority as 'critical' | 'high' | 'standard' | 'bulk',
+      routingMode: parsed.routing_mode,
+      channelPreference: parsed.channel_preference,
+      forceChannel: parsed.force_channel,
+      metadata: parsed.metadata as Record<string, unknown> | undefined,
+      idempotencyKey: idempotencyKey,
+    });
+    notificationId = result.notificationId;
+    createdAt = result.createdAt;
+    priority = result.priority;
+    routingMode = result.routingMode;
   } catch (err) {
-    logger.error({ err, requestId, tenantId }, 'Failed to insert notification');
+    if (err instanceof QueueUnavailableError) {
+      logger.error({ err: err.cause, requestId, tenantId }, 'Queue failed');
+      res.status(503).json({
+        error: { code: 'SERVICE_UNAVAILABLE', message: 'Queue unavailable. Retry later.' },
+        request_id: requestId,
+      });
+      return;
+    }
+    logger.error({ err, requestId, tenantId }, 'Failed to create notification');
     res.status(500).json({
       error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
       request_id: requestId,
@@ -105,50 +108,13 @@ notificationRouter.post('/', async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const priority = parsed.priority as NotificationPriority;
-
-  const jobData: NotificationJob = {
-    notificationId,
-    tenantId,
-    recipient: parsed.recipient,
-    priority,
-    routingMode: parsed.routing_mode,
-    channelPreference: parsed.channel_preference,
-    forceChannel: parsed.force_channel,
-  };
-
-  const retryConfig = RETRY_CONFIG[priority];
-
-  try {
-    const queue = getNotificationQueue(priority);
-    await queue.add('deliver', jobData, {
-      attempts: retryConfig.attempts,
-      backoff: retryConfig.backoff,
-    });
-  } catch (err) {
-    logger.error({ err, requestId, tenantId, notificationId }, 'Queue failed');
-    res.status(503).json({
-      error: { code: 'SERVICE_UNAVAILABLE', message: 'Queue unavailable. Retry later.' },
-      request_id: requestId,
-    });
-    return;
-  }
-  try {
-    await dbClient.query(
-      `UPDATE notifications SET status = 'queued', updated_at = NOW() WHERE id = $1`,
-      [notificationId],
-    );
-  } catch (err) {
-    logger.error({ err, requestId, notificationId }, 'Status update failed');
-  }
-
-  logger.info({ requestId, tenantId, notificationId, priority: parsed.priority }, 'Notification queued');
+  logger.info({ requestId, tenantId, notificationId, priority }, 'Notification queued');
 
   res.status(202).json({
     id: notificationId,
     status: 'queued',
-    priority: parsed.priority,
-    routing_mode: parsed.routing_mode,
+    priority,
+    routing_mode: routingMode,
     created_at: createdAt,
     status_url: `/v1/notifications/${notificationId}`,
     request_id: requestId,
@@ -241,7 +207,8 @@ notificationRouter.get('/', async (req: Request, res: Response): Promise<void> =
          id, recipient, channel_preference, force_channel,
          routing_mode, subject, priority, status,
          delivered_via, delivered_at, failed_at,
-         metadata, routing_decision, created_at, updated_at
+         metadata, routing_decision, content_classification,
+         created_at, updated_at
        FROM notifications
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
@@ -290,7 +257,7 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
     const notifResult = await dbClient.query(
       `SELECT id, tenant_id, status, recipient, subject, priority, routing_mode,
               delivered_via, delivered_at, failed_at, routing_decision,
-              metadata, created_at, updated_at
+              content_classification, metadata, created_at, updated_at
        FROM notifications
        WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId],
@@ -316,8 +283,8 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
 
     const attemptsResult = await dbClient.query(
       `SELECT channel_type, attempt_number, status, status_code,
-              error_message, engaged, engagement_type, engaged_at,
-              started_at, completed_at, duration_ms
+              error_message, engaged, engagement_type, engagement_reason,
+              engaged_at, started_at, completed_at, duration_ms, feature_vector
        FROM delivery_attempts
        WHERE notification_id = $1 AND tenant_id = $2
        ORDER BY attempt_number ASC`,

@@ -25,6 +25,22 @@ export interface Notification {
   deliveredAt: string | null;
 }
 
+export interface DeliveryAttempt {
+  channel_type: string;
+  attempt_number: number;
+  status: string;
+  status_code: number | null;
+  error_message: string | null;
+  engaged: boolean | null;
+  engagement_type: string | null;
+  engagement_reason: string | null;
+  engaged_at: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+  feature_vector: Record<string, number> | null;
+}
+
 export interface NotificationDetail {
   id: string;
   recipient: string;
@@ -36,6 +52,9 @@ export interface NotificationDetail {
   deliveredAt: string | null;
   attempts: number;
   routingMode: string;
+  routing_decision?: Record<string, unknown> | null;
+  content_classification?: Record<string, unknown> | null;
+  delivery_attempts?: DeliveryAttempt[];
 }
 
 export interface NotificationListResponse {

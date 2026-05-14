@@ -39,6 +39,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://notify:notify@postgres:5432/notifyengine
+      MIN_RETRAIN_SAMPLES: "20"
     volumes:
       - ./apps/ml-service:/app
       - mlmodels:/app/models

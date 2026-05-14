@@ -2,27 +2,13 @@ import NotificationsTable from "../components/NotificationsTable";
 
 export default function Notifications() {
   return (
-    <main style={{
-      flex: 1,
-      backgroundColor: "#F9FAFB",
-      padding: "32px",
-      minHeight: "100vh",
-    }}>
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{
-          fontSize: "22px",
-          fontWeight: "700",
-          color: "#111827",
-          margin: 0,
-        }}>
+    <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen">
+      <div className="mb-7">
+        <h1 className="text-[22px] font-bold text-gray-900 dark:text-gray-100">
           Notifications
         </h1>
-        <p style={{
-          fontSize: "13px",
-          color: "#9CA3AF",
-          margin: "4px 0 0 0",
-        }}>
-          Sprint 2 · All notifications for this tenant
+        <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1">
+          All notifications for this tenant
         </p>
       </div>
 

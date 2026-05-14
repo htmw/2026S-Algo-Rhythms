@@ -26,6 +26,10 @@ FEATURE_COLUMNS: list[str] = [
     "notification_priority_score",
     "content_length",
     "channel_health",
+    "urgency_score",
+    "category_encoded",
+    "time_sensitivity_score",
+    "sentiment_score",
 ]
 
 # Defaults match the worker's behavior for missing recipient history (spec 5.3).
@@ -44,6 +48,10 @@ DEFAULTS: dict[str, float] = {
     "notification_priority_score": 2,
     "content_length": 0,
     "channel_health": 1.0,
+    "urgency_score": 0.0,
+    "category_encoded": 0,
+    "time_sensitivity_score": 0.0,
+    "sentiment_score": 0.0,
 }
 
 
