@@ -7,6 +7,7 @@ import { logger } from '../logger.js';
 import { emitDashboardEvent, maskEmail } from './apiEmitter.js';
 
 const NOTIFICATION_CHANNEL = 'notifications:delivery';
+const WS_CONNECTED_KEY = 'ws:connected_recipients';
 const ACK_TIMEOUT_MS = 30_000;
 
 const NotificationMessageSchema = z.object({
@@ -22,8 +23,12 @@ const NotificationMessageSchema = z.object({
   }),
 });
 
-export function registerNotificationNamespace(io: Server): Namespace {
+export function registerNotificationNamespace(io: Server, redis?: Redis): Namespace {
   const nsp = io.of('/notifications');
+  const presenceRedis = redis ?? new Redis(
+    process.env.REDIS_URL || 'redis://localhost:6379',
+    { maxRetriesPerRequest: null },
+  );
 
   nsp.on('connection', (socket: Socket) => {
     const recipientId = socket.handshake.auth?.recipientId as string | undefined;
@@ -35,13 +40,19 @@ export function registerNotificationNamespace(io: Server): Namespace {
 
     const room = `user:${recipientId}`;
     void socket.join(room);
+    void presenceRedis.sadd(WS_CONNECTED_KEY, recipientId);
 
     logger.info(
       { recipientId, socketId: socket.id },
       'Recipient connected to notifications namespace',
     );
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
+      const socketsInRoom = await nsp.in(room).allSockets();
+      if (socketsInRoom.size === 0) {
+        void presenceRedis.srem(WS_CONNECTED_KEY, recipientId);
+      }
+
       logger.info(
         { recipientId, socketId: socket.id },
         'Recipient disconnected from notifications namespace',
@@ -118,8 +129,12 @@ async function setupAckListeners(
   }
 }
 
+const ENGAGEMENT_RETRY_DELAY_MS = 500;
+const ENGAGEMENT_MAX_RETRIES = 5;
+
 async function recordWsEngagement(
   message: z.infer<typeof NotificationMessageSchema>,
+  attempt = 0,
 ): Promise<void> {
   let client;
   try {
@@ -130,7 +145,7 @@ async function recordWsEngagement(
       [message.tenantId],
     );
 
-    await client.query(
+    const updateResult = await client.query(
       `UPDATE delivery_attempts
        SET engaged = true,
            engaged_at = NOW(),
@@ -140,6 +155,23 @@ async function recordWsEngagement(
          AND engaged IS NOT TRUE`,
       [message.notificationId],
     );
+
+    // The worker inserts the delivery_attempts row AFTER publishing to Redis,
+    // so the ack can arrive before the row exists.
+    if (updateResult.rowCount === 0 && attempt < ENGAGEMENT_MAX_RETRIES) {
+      client.release();
+      client = undefined;
+      await new Promise((r) => setTimeout(r, ENGAGEMENT_RETRY_DELAY_MS));
+      return recordWsEngagement(message, attempt + 1);
+    }
+
+    if (updateResult.rowCount === 0) {
+      logger.warn(
+        { notificationId: message.notificationId, attempts: attempt + 1 },
+        'WebSocket ack engagement: delivery_attempts row not found after retries',
+      );
+      return;
+    }
 
     await client.query(
       `INSERT INTO recipient_channel_stats (
@@ -165,7 +197,7 @@ async function recordWsEngagement(
     });
 
     logger.info(
-      { notificationId: message.notificationId },
+      { notificationId: message.notificationId, attempts: attempt + 1 },
       'WebSocket ack engagement recorded',
     );
   } catch (err) {

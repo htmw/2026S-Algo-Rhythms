@@ -3,6 +3,7 @@ import type { DeliveryChannel, DeliveryContext, DeliveryResult } from './types.j
 import { logger } from '../logger.js';
 
 const NOTIFICATIONS_CHANNEL = 'notifications:delivery';
+const WS_CONNECTED_KEY = 'ws:connected_recipients';
 
 export class WebSocketChannel implements DeliveryChannel {
   private redis: Redis;
@@ -26,6 +27,11 @@ export class WebSocketChannel implements DeliveryChannel {
     context?: DeliveryContext,
   ): Promise<DeliveryResult> {
     try {
+      const connected = await this.redis.sismember(WS_CONNECTED_KEY, recipient);
+      if (!connected) {
+        return { success: false, error: 'Recipient not connected' };
+      }
+
       await this.redis.publish(
         NOTIFICATIONS_CHANNEL,
         JSON.stringify({
