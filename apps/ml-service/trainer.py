@@ -281,6 +281,27 @@ class ModelTrainer:
 
                 if new_auc > current_auc:
                     should_promote = True
+                elif abs(new_auc - current_auc) < 1e-6 and new_samples > current_samples:
+                    logger.info(
+                        "Equal AUC (within 1e-6) with more training data (%d -> %d), promoting",
+                        current_samples,
+                        new_samples,
+                    )
+                    should_promote = True
+                elif (
+                    current_auc >= 1.0 - 1e-6
+                    and new_samples > current_samples
+                    and new_auc >= self.settings.min_auc_threshold
+                ):
+                    logger.info(
+                        "Current model likely overfit (AUC %.4f on %d samples), "
+                        "replacing with more robust model (AUC %.4f on %d samples)",
+                        current_auc,
+                        current_samples,
+                        new_auc,
+                        new_samples,
+                    )
+                    should_promote = True
                 elif current_samples > 0 and new_samples >= current_samples * 2:
                     should_promote = new_auc >= self.settings.min_auc_threshold
                 else:
