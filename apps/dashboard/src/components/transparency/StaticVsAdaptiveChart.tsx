@@ -1,129 +1,110 @@
-import { useEffect, useState } from "react";
-import { apiFetch } from "../../lib/api";
-
-interface DataPoint { date: string; routing_mode: string; total: number; engaged: number; }
-interface ChartPoint { date: string; static: number; adaptive: number; }
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+import { useEngagementComparison } from "../../hooks/useEngagementComparison";
 
 export function StaticVsAdaptiveChart() {
-  const [data, setData] = useState<ChartPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [empty, setEmpty] = useState(false);
+  const { data, isLoading, isError } = useEngagementComparison();
 
-  useEffect(() => {
-    apiFetch<{ data: DataPoint[] }>("/v1/routing/engagement-comparison")
-      .then((res) => {
-        const raw = res.data ?? [];
-        if (raw.length === 0) { setEmpty(true); setLoading(false); return; }
+  if (isLoading) {
+    return (
+      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+        <p className="text-sm text-gray-400 dark:text-gray-500">Loading chart...</p>
+      </div>
+    );
+  }
 
-        const map: Record<string, ChartPoint> = {};
-       raw.forEach(({ date, routing_mode, total, engaged }) => {
-  const d = date.split("T")[0];
-  if (!map[d]) map[d] = { date: d, static: 0, adaptive: 0 };
-  // Show delivery rate (total > 0 means delivered); falls back to engagement when available
-  const rate = total > 0 ? Math.max(Math.round((engaged / total) * 100), total > 0 ? 100 : 0) : 0;
-  if (routing_mode === "static") map[d].static = rate;
-  if (routing_mode === "adaptive") map[d].adaptive = rate;
-});
+  if (isError) {
+    return (
+      <div className="rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 p-6 text-sm text-red-600 dark:text-red-400">
+        Failed to load comparison data. Check API connection.
+      </div>
+    );
+  }
 
-        setData(Object.values(map).sort((a, b) => a.date.localeCompare(b.date)));
-        setLoading(false);
-      })
-      .catch(() => { setEmpty(true); setLoading(false); });
-  }, []);
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">No comparison data yet.</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          Send notifications with both <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">routing_mode: "static"</code> and{" "}
+          <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">routing_mode: "adaptive"</code> to see the comparison.
+        </p>
+      </div>
+    );
+  }
 
-  if (loading) return (
-    <div style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-      <p style={{ color: "#9CA3AF", fontSize: "14px" }}>Loading chart…</p>
-    </div>
-  );
-
-  if (empty || data.length === 0) return (
-    <div style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", textAlign: "center" }}>
-      <p style={{ fontSize: "28px", margin: "0 0 8px" }}>📊</p>
-      <p style={{ color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>No comparison data yet.</p>
-      <p style={{ color: "#9CA3AF", fontSize: "12px", marginTop: "4px" }}>
-        Send notifications with both <code>routing_mode: "static"</code> and <code>routing_mode: "adaptive"</code> to see the comparison.
-      </p>
-    </div>
-  );
-
-  const maxRate = Math.max(...data.flatMap((d) => [d.static, d.adaptive]), 1);
-  const chartHeight = 180;
+  const avgStatic = data.reduce((s, d) => s + d.static, 0) / data.length;
+  const avgAdaptive = data.reduce((s, d) => s + d.adaptive, 0) / data.length;
+  const uplift = avgAdaptive - avgStatic;
 
   return (
-    <div style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", margin: 0 }}>DELIVERY RATE OVER TIME (engagement rate when available)</p>
-        <div style={{ display: "flex", gap: "16px" }}>
-          {[{ label: "Static", color: "#9CA3AF" }, { label: "Adaptive", color: "#2563EB" }].map((l) => (
-            <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#374151" }}>
-              <div style={{ width: "12px", height: "3px", backgroundColor: l.color, borderRadius: "2px" }} />
-              {l.label}
-            </div>
-          ))}
-        </div>
+    <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+      <div className="h-[240px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <XAxis
+              dataKey="date"
+              tickFormatter={(d: string) => d.slice(5)}
+              tick={{ fontSize: 11, fill: "#9CA3AF" }}
+              stroke="#D1D5DB"
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fontSize: 11, fill: "#9CA3AF" }}
+              stroke="#D1D5DB"
+              tickFormatter={(v: number) => `${v}%`}
+            />
+            <Tooltip
+              formatter={(value: number, name: string) => [`${value}%`, name === "static" ? "Static" : "Adaptive"]}
+              labelFormatter={(label: string) => `Date: ${label}`}
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E5E7EB" }}
+            />
+            <Legend
+              formatter={(value: string) => (value === "static" ? "Static" : "Adaptive")}
+              wrapperStyle={{ fontSize: 12 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="static"
+              stroke="#9CA3AF"
+              strokeWidth={2}
+              dot={{ r: 3, fill: "#9CA3AF" }}
+              activeDot={{ r: 5 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="adaptive"
+              stroke="#2563EB"
+              strokeWidth={2}
+              dot={{ r: 3, fill: "#2563EB" }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
-      {/* Chart */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: `${chartHeight}px`, borderBottom: "1px solid #E5E7EB", paddingBottom: "0" }}>
-        {data.map((point) => (
-          <div key={point.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", height: "100%", justifyContent: "flex-end" }}>
-            <div style={{ width: "100%", display: "flex", gap: "2px", alignItems: "flex-end", height: "100%", justifyContent: "center" }}>
-              {/* Static bar */}
-              <div
-                title={`Static: ${point.static}%`}
-                style={{
-                  width: "40%", borderRadius: "3px 3px 0 0",
-                  backgroundColor: "#E5E7EB",
-                  height: `${(point.static / maxRate) * chartHeight}px`,
-                  minHeight: point.static > 0 ? "4px" : "0",
-                  transition: "height 0.4s ease",
-                }}
-              />
-              {/* Adaptive bar */}
-              <div
-                title={`Adaptive: ${point.adaptive}%`}
-                style={{
-                  width: "40%", borderRadius: "3px 3px 0 0",
-                  backgroundColor: "#2563EB",
-                  height: `${(point.adaptive / maxRate) * chartHeight}px`,
-                  minHeight: point.adaptive > 0 ? "4px" : "0",
-                  transition: "height 0.4s ease",
-                }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* X axis labels */}
-      <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-        {data.map((point) => (
-          <div key={point.date} style={{ flex: 1, textAlign: "center", fontSize: "10px", color: "#9CA3AF" }}>
-            {point.date.slice(5)}
-          </div>
-        ))}
-      </div>
-
-      {/* Summary */}
-      <div style={{ display: "flex", gap: "16px", marginTop: "20px", borderTop: "1px solid #F3F4F6", paddingTop: "16px" }}>
+      <div className="flex gap-4 mt-5 border-t border-gray-100 dark:border-gray-700 pt-4">
         {[
-          { label: "Avg Static Rate", value: (data.reduce((s, d) => s + d.static, 0) / data.length).toFixed(1) + "%", color: "#6B7280" },
-          { label: "Avg Adaptive Rate", value: (data.reduce((s, d) => s + d.adaptive, 0) / data.length).toFixed(1) + "%", color: "#2563EB" },
+          { label: "Avg Static Rate", value: avgStatic.toFixed(1) + "%", textClass: "text-gray-500 dark:text-gray-400" },
+          { label: "Avg Adaptive Rate", value: avgAdaptive.toFixed(1) + "%", textClass: "text-blue-600 dark:text-blue-400" },
           {
             label: "Adaptive Uplift",
-            value: (() => {
-              const avgStatic = data.reduce((s, d) => s + d.static, 0) / data.length;
-              const avgAdaptive = data.reduce((s, d) => s + d.adaptive, 0) / data.length;
-              const uplift = avgAdaptive - avgStatic;
-              return (uplift >= 0 ? "+" : "") + uplift.toFixed(1) + "%";
-            })(),
-            color: "#16A34A",
+            value: (uplift >= 0 ? "+" : "") + uplift.toFixed(1) + "%",
+            textClass: "text-green-600 dark:text-green-400",
           },
         ].map((s) => (
-          <div key={s.label} style={{ flex: 1, backgroundColor: "#F9FAFB", borderRadius: "8px", padding: "10px 14px" }}>
-            <p style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600", textTransform: "uppercase", margin: 0 }}>{s.label}</p>
-            <p style={{ fontSize: "18px", fontWeight: "700", color: s.color, margin: "2px 0 0" }}>{s.value}</p>
+          <div key={s.label} className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg px-3.5 py-2.5">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold uppercase m-0">{s.label}</p>
+            <p className={`text-lg font-bold mt-0.5 m-0 ${s.textClass}`}>{s.value}</p>
           </div>
         ))}
       </div>

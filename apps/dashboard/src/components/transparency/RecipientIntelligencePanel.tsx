@@ -1,45 +1,28 @@
-import { useState, useEffect } from "react";
-import { apiFetch } from "../../lib/api";
-
-interface Recipient { recipient: string; total_sent: number; total_engaged: number; }
-interface EngagementRow { channel: string; sent: number; engaged: number; delivered: number; }
+import { useState } from "react";
+import { useRecipients, useRecipientEngagement } from "../../hooks/useRecipients";
 
 export function RecipientIntelligencePanel() {
-  const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [selected, setSelected] = useState<string>("");
-  const [history, setHistory] = useState<EngagementRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState("");
+  const { data: recipientData, isLoading: recipientsLoading, isError: recipientsError } = useRecipients();
+  const { data: engagementData, isLoading: engagementLoading, isError: engagementError } = useRecipientEngagement(selected);
 
-  useEffect(() => {
-    apiFetch<{ data: Recipient[] }>("/v1/routing/recipients")
-      .then((r) => setRecipients(r.data ?? []))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!selected) return;
-    setLoading(true);
-    apiFetch<{ data: EngagementRow[] }>(`/v1/routing/recipients/${encodeURIComponent(selected)}/engagement`)
-      .then((r) => setHistory(r.data ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, [selected]);
-
+  const recipients = recipientData?.data ?? [];
+  const history = engagementData?.data ?? [];
   const totalSent = history.reduce((s, r) => s + r.sent, 0);
   const totalEngaged = history.reduce((s, r) => s + r.engaged, 0);
 
   return (
-    <div style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-      <div style={{ marginBottom: "20px" }}>
-        <label style={{ fontSize: "12px", fontWeight: "600", color: "#6B7280", display: "block", marginBottom: "6px" }}>
-          SELECT RECIPIENT
+    <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+      <div className="mb-5">
+        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
+          Select Recipient
         </label>
         <select
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
-          style={{ width: "100%", maxWidth: "400px", padding: "8px 12px", borderRadius: "8px", border: "1px solid #D1D5DB", fontSize: "14px", color: "#111827", backgroundColor: "white" }}
+          className="w-full max-w-[400px] px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
         >
-          <option value="">Choose a recipient…</option>
+          <option value="">Choose a recipient...</option>
           {recipients.map((r) => (
             <option key={r.recipient} value={r.recipient}>
               {r.recipient} ({r.total_sent} sent)
@@ -48,31 +31,52 @@ export function RecipientIntelligencePanel() {
         </select>
       </div>
 
-      {loading && <p style={{ color: "#9CA3AF", fontSize: "14px" }}>Loading…</p>}
-
-      {!loading && selected && history.length === 0 && (
-        <p style={{ color: "#9CA3AF", fontSize: "14px" }}>No engagement data yet for this recipient.</p>
+      {recipientsLoading && (
+        <p className="text-sm text-gray-400 dark:text-gray-500">Loading recipients...</p>
       )}
 
-      {!loading && history.length > 0 && (
+      {recipientsError && (
+        <p className="text-sm text-red-500 dark:text-red-400">Failed to load recipients. Check API connection.</p>
+      )}
+
+      {engagementLoading && selected && (
+        <p className="text-sm text-gray-400 dark:text-gray-500">Loading engagement data...</p>
+      )}
+
+      {engagementError && selected && (
+        <p className="text-sm text-red-500 dark:text-red-400">Failed to load engagement data.</p>
+      )}
+
+      {!engagementLoading && selected && history.length === 0 && !engagementError && (
+        <p className="text-sm text-gray-400 dark:text-gray-500">No engagement data yet for this recipient.</p>
+      )}
+
+      {!engagementLoading && history.length > 0 && (
         <>
-          <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
+          <div className="flex gap-3 mb-5">
             {[
-              { label: "Total Sent", value: totalSent, color: "#2563EB" },
-              { label: "Total Engaged", value: totalEngaged, color: "#16A34A" },
-              { label: "Overall Rate", value: totalSent > 0 ? ((totalEngaged / totalSent) * 100).toFixed(1) + "%" : "0%", color: "#9333EA" },
+              { label: "Total Sent", value: totalSent, textClass: "text-blue-600 dark:text-blue-400" },
+              { label: "Total Engaged", value: totalEngaged, textClass: "text-green-600 dark:text-green-400" },
+              {
+                label: "Overall Rate",
+                value: totalSent > 0 ? ((totalEngaged / totalSent) * 100).toFixed(1) + "%" : "0%",
+                textClass: "text-purple-600 dark:text-purple-400",
+              },
             ].map((s) => (
-              <div key={s.label} style={{ flex: 1, backgroundColor: "#F9FAFB", borderRadius: "8px", padding: "12px 16px" }}>
-                <p style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600", textTransform: "uppercase", margin: 0 }}>{s.label}</p>
-                <p style={{ fontSize: "22px", fontWeight: "700", color: s.color, margin: "4px 0 0" }}>{s.value}</p>
+              <div key={s.label} className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg px-4 py-3">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold uppercase m-0">{s.label}</p>
+                <p className={`text-[22px] font-bold mt-1 m-0 ${s.textClass}`}>{s.value}</p>
               </div>
             ))}
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+
+          <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
                 {["Channel", "Sent", "Engaged", "Rate"].map((h) => (
-                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: "600", color: "#6B7280", fontSize: "11px", textTransform: "uppercase" }}>{h}</th>
+                  <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -80,16 +84,23 @@ export function RecipientIntelligencePanel() {
               {history.map((row) => {
                 const rate = row.sent > 0 ? (row.engaged / row.sent) * 100 : 0;
                 return (
-                  <tr key={row.channel} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: "500", color: "#111827", textTransform: "capitalize" }}>{row.channel}</td>
-                    <td style={{ padding: "10px 12px", color: "#374151" }}>{row.sent}</td>
-                    <td style={{ padding: "10px 12px", color: "#374151" }}>{row.engaged}</td>
-                    <td style={{ padding: "10px 12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ flex: 1, height: "6px", backgroundColor: "#F3F4F6", borderRadius: "3px", overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${rate}%`, backgroundColor: rate > 50 ? "#16A34A" : rate > 20 ? "#F59E0B" : "#EF4444", borderRadius: "3px" }} />
+                  <tr key={row.channel} className="border-b border-gray-100 dark:border-gray-700">
+                    <td className="px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100 capitalize">{row.channel}</td>
+                    <td className="px-3 py-2.5 text-gray-700 dark:text-gray-300">{row.sent}</td>
+                    <td className="px-3 py-2.5 text-gray-700 dark:text-gray-300">{row.engaged}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              rate > 50 ? "bg-green-500" : rate > 20 ? "bg-yellow-500" : "bg-red-500"
+                            }`}
+                            style={{ width: `${rate}%` }}
+                          />
                         </div>
-                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#374151", minWidth: "36px" }}>{rate.toFixed(1)}%</span>
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[36px]">
+                          {rate.toFixed(1)}%
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -100,8 +111,8 @@ export function RecipientIntelligencePanel() {
         </>
       )}
 
-      {!selected && recipients.length === 0 && (
-        <p style={{ color: "#9CA3AF", fontSize: "14px" }}>No recipients yet. Send notifications to see data here.</p>
+      {!selected && recipients.length === 0 && !recipientsLoading && !recipientsError && (
+        <p className="text-sm text-gray-400 dark:text-gray-500">No recipients yet. Send notifications to see data here.</p>
       )}
     </div>
   );

@@ -1,51 +1,49 @@
-import { useEffect, useState } from "react";
-import { apiFetch } from "../../lib/api";
+import { ArrowUp, ArrowDown } from "lucide-react";
+import { useModelMetrics, useModelHistory } from "../../hooks/useModelMetrics";
 
-interface ModelInfo {
-  loaded: boolean;
-  version?: string;
-  metrics?: Record<string, number>;
-  feature_importance?: Record<string, number>;
-  training_samples?: number;
-  status?: string;
+function MetricDelta({ current, previous, label }: { current: number | null; previous: number | null; label: string }) {
+  if (current == null || previous == null) return <span className="text-gray-400 dark:text-gray-500">—</span>;
+  const delta = current - previous;
+  const improved = delta > 0;
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[13px] text-gray-500 dark:text-gray-400">{label}</span>
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">{current.toFixed(4)}</span>
+        <span className={`flex items-center gap-0.5 text-xs font-medium ${improved ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+          {improved ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+          {Math.abs(delta).toFixed(4)}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function ModelMetricsPanel() {
-  const [model, setModel] = useState<ModelInfo | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { data: model, isLoading, isError } = useModelMetrics();
+  const { data: historyData } = useModelHistory();
 
-  useEffect(() => {
-    apiFetch<ModelInfo>("/v1/routing/model")
-      .then((data) => {
-        if (!data.loaded) setUnavailable(true);
-        else setModel(data);
-      })
-      .catch(() => setUnavailable(true))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div style={{
-        backgroundColor: "white", borderRadius: "12px",
-        padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-      }}>
-        <p style={{ color: "#9CA3AF", fontSize: "14px" }}>Loading model info…</p>
+      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+        <p className="text-sm text-gray-400 dark:text-gray-500">Loading model info...</p>
       </div>
     );
   }
 
-  if (unavailable || !model) {
+  if (isError) {
     return (
-      <div style={{
-        backgroundColor: "white", borderRadius: "12px",
-        padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-        textAlign: "center",
-      }}>
-        <p style={{ fontSize: "32px", margin: "0 0 8px" }}>🤖</p>
-        <p style={{ color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>No model trained yet.</p>
-        <p style={{ color: "#9CA3AF", fontSize: "12px", marginTop: "4px" }}>
+      <div className="rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 p-6 text-sm text-red-600 dark:text-red-400">
+        Failed to load model metrics. Check API connection.
+      </div>
+    );
+  }
+
+  if (!model?.loaded) {
+    return (
+      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">No model trained yet.</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
           Send notifications with adaptive routing to generate training data.
         </p>
       </div>
@@ -57,75 +55,108 @@ export function ModelMetricsPanel() {
     : [];
   const maxVal = features.length > 0 ? Math.max(...features.map(([, v]) => v)) : 1;
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-      {/* Stats cards */}
-      <div style={{
-        backgroundColor: "white", borderRadius: "12px",
-        padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-      }}>
-        <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", marginBottom: "16px" }}>
-          MODEL METADATA
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {[
-            { label: "Version", value: model.version ?? "—" },
-            { label: "Training Samples", value: model.training_samples?.toLocaleString() ?? "—" },
-            { label: "Status", value: model.loaded ? "Active" : "Not loaded" },
-            ...(model.metrics ? Object.entries(model.metrics).map(([k, v]) => ({
-              label: k.toUpperCase(),
-              value: typeof v === "number" ? v.toFixed(4) : String(v),
-            })) : []),
-          ].map(({ label, value }) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "13px", color: "#6B7280" }}>{label}</span>
-              <span style={{
-  fontSize: "13px", fontWeight: "600",
-  padding: label === "Status" ? "2px 10px" : "0",
-  backgroundColor: label === "Status" ? (model.loaded ? "#EFF6FF" : "#FEF2F2") : "transparent",
-  color: label === "Status" ? (model.loaded ? "#2563EB" : "#DC2626") : "#111827",
-  borderRadius: label === "Status" ? "20px" : "0",
-}}>
-  {value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+  const history = historyData?.data ?? [];
+  const current = history[0] ?? null;
+  const previous = history[1] ?? null;
 
-      {/* Feature importance */}
-      <div style={{
-        backgroundColor: "white", borderRadius: "12px",
-        padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-      }}>
-        <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", marginBottom: "16px" }}>
-          FEATURE IMPORTANCE
-        </p>
-        {features.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {features.map(([name, importance]) => (
-              <div key={name}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span style={{ fontSize: "13px", color: "#374151" }}>{name}</span>
-                  <span style={{ fontSize: "13px", fontWeight: "600", color: "#111827" }}>
-                    {(importance * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div style={{ height: "8px", backgroundColor: "#F3F4F6", borderRadius: "4px", overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%",
-                    width: `${(importance / maxVal) * 100}%`,
-                    backgroundColor: "#2563EB",
-                    borderRadius: "4px",
-                    transition: "width 0.6s ease",
-                  }} />
-                </div>
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-5">
+        <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+          <p className="text-[13px] text-gray-500 dark:text-gray-400 font-medium mb-4 uppercase">
+            Model Metadata
+          </p>
+          <div className="flex flex-col gap-3">
+            {[
+              { label: "Version", value: model.version ?? "—" },
+              { label: "Training Samples", value: model.training_samples?.toLocaleString() ?? "—" },
+              { label: "Status", value: model.loaded ? "Active" : "Not loaded" },
+              ...(model.metrics
+                ? Object.entries(model.metrics).map(([k, v]) => ({
+                    label: k.toUpperCase(),
+                    value: typeof v === "number" ? v.toFixed(4) : String(v),
+                  }))
+                : []),
+            ].map(({ label, value }) => (
+              <div key={label} className="flex justify-between items-center">
+                <span className="text-[13px] text-gray-500 dark:text-gray-400">{label}</span>
+                <span
+                  className={`text-[13px] font-semibold ${
+                    label === "Status"
+                      ? model.loaded
+                        ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-2.5 py-0.5 rounded-full"
+                        : "bg-red-50 dark:bg-red-900/40 text-red-600 dark:text-red-400 px-2.5 py-0.5 rounded-full"
+                      : "text-gray-900 dark:text-gray-100"
+                  }`}
+                >
+                  {value}
+                </span>
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+          <p className="text-[13px] text-gray-500 dark:text-gray-400 font-medium mb-4 uppercase">
+            Feature Importance
+          </p>
+          {features.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {features.map(([name, importance]) => (
+                <div key={name}>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[13px] text-gray-700 dark:text-gray-300">{name}</span>
+                    <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                      {(importance * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                    <div
+                      className="h-full bg-blue-600 dark:bg-blue-500 rounded transition-all duration-500"
+                      style={{ width: `${(importance / maxVal) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-gray-400 dark:text-gray-500">
+              No feature importance data available. Train the model first.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+        <p className="text-[13px] text-gray-500 dark:text-gray-400 font-medium mb-4 uppercase">
+          Pre/Post Retrain Comparison
+        </p>
+        {current && previous ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center text-xs text-gray-400 dark:text-gray-500 mb-1">
+              <span>Previous: {previous.version} ({new Date(previous.created_at).toLocaleDateString()})</span>
+              <span>Current: {current.version} ({new Date(current.created_at).toLocaleDateString()})</span>
+            </div>
+            <MetricDelta current={current.auc_roc} previous={previous.auc_roc} label="AUC-ROC" />
+            <MetricDelta current={current.accuracy} previous={previous.accuracy} label="Accuracy" />
+            <MetricDelta current={current.precision_score} previous={previous.precision_score} label="Precision" />
+            <MetricDelta current={current.recall_score} previous={previous.recall_score} label="Recall" />
+            <MetricDelta current={current.f1_score} previous={previous.f1_score} label="F1 Score" />
+            <div className="flex justify-between items-center">
+              <span className="text-[13px] text-gray-500 dark:text-gray-400">Training Samples</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                  {current.training_samples.toLocaleString()}
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  (was {previous.training_samples.toLocaleString()})
+                </span>
+              </div>
+            </div>
+          </div>
         ) : (
-          <p style={{ fontSize: "13px", color: "#9CA3AF" }}>
-            No feature importance data available. Train the model first.
+          <p className="text-sm text-gray-400 dark:text-gray-500">
+            No previous model to compare. A comparison will appear after the first retrain.
           </p>
         )}
       </div>

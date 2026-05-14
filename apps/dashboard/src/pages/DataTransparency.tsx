@@ -3,57 +3,45 @@ import { RecipientIntelligencePanel } from "../components/transparency/Recipient
 import { StaticVsAdaptiveChart } from "../components/transparency/StaticVsAdaptiveChart";
 import { ModelMetricsPanel } from "../components/transparency/ModelMetricsPanel";
 
-
-export default function DataTransparency() {
+export function DataTransparency() {
   return (
-    <main style={{
-      flex: 1,
-      backgroundColor: "#F9FAFB",
-      padding: "32px",
-      minHeight: "100vh",
-      overflowY: "auto",
-    }}>
-      {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: "700", color: "#111827", margin: 0 }}>
+    <main className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 min-h-screen overflow-y-auto">
+      <div className="mb-7">
+        <h1 className="text-[22px] font-bold text-gray-900 dark:text-gray-100">
           Data Transparency
         </h1>
-        <p style={{ fontSize: "13px", color: "#9CA3AF", marginTop: "4px" }}>
+        <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1">
           Sprint 3 · Live ML learning evidence — notifications, engagement history, and model metrics
         </p>
       </div>
 
-      {/* Section 1 — Notifications Audit */}
-      <section style={{ marginBottom: "32px" }}>
-        <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "12px" }}>
+      <section className="mb-8">
+        <h2 className="text-[15px] font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Notifications Audit
         </h2>
         <NotificationsAuditTable />
       </section>
 
-      {/* Section 2 — Recipient Intelligence */}
-      <section style={{ marginBottom: "32px" }}>
-        <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "12px" }}>
+      <section className="mb-8">
+        <h2 className="text-[15px] font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Recipient Intelligence
         </h2>
         <RecipientIntelligencePanel />
       </section>
 
-      {/* Section 3 — Model Metrics */}
-      <section style={{ marginBottom: "32px" }}>
-        <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "12px" }}>
+      <section className="mb-8">
+        <h2 className="text-[15px] font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Model Metrics
         </h2>
         <ModelMetricsPanel />
       </section>
 
-      {/* Section 4 — Static vs Adaptive Chart */}
-<section style={{ marginBottom: "32px" }}>
-  <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "12px" }}>
-    Static vs Adaptive Engagement
-  </h2>
-  <StaticVsAdaptiveChart />
-</section>
+      <section className="mb-8">
+        <h2 className="text-[15px] font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Static vs Adaptive Engagement
+        </h2>
+        <StaticVsAdaptiveChart />
+      </section>
     </main>
   );
 }
