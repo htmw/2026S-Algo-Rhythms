@@ -64,8 +64,8 @@ export function StaticVsAdaptiveChart() {
               tickFormatter={(v: number) => `${v}%`}
             />
             <Tooltip
-              formatter={(value: number, name: string) => [`${value}%`, name === "static" ? "Static" : "Adaptive"]}
-              labelFormatter={(label: string) => `Date: ${label}`}
+              formatter={(value) => `${value}%`}
+              labelFormatter={(label) => String(label)}
               contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E5E7EB" }}
             />
             <Legend
