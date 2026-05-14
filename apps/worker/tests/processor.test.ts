@@ -5,7 +5,12 @@ import { DASHBOARD_EVENTS } from '@notifyengine/shared';
 import type { DashboardEventPublisher } from '../src/dashboardEvents.js';
 
 // ── Hoisted mocks ──
-const { mockPoolConnect, mockDeliverEmail, mockPredictChannel, mockClassifyContent } = vi.hoisted(() => ({
+const {
+  mockPoolConnect,
+  mockDeliverEmail,
+  mockPredictChannel,
+  mockClassifyContent,
+} = vi.hoisted(() => ({
   mockPoolConnect: vi.fn(),
   mockDeliverEmail: vi.fn(),
   mockPredictChannel: vi.fn(),
@@ -39,8 +44,16 @@ vi.mock('../src/logger.js', () => {
   };
 });
 
-vi.mock('../src/channels/email.js', () => ({
-  deliverEmail: mockDeliverEmail,
+vi.mock('../src/channels/registry.js', () => ({
+  getDeliveryChannel: vi.fn((channelType: string) => {
+    if (channelType !== 'email') {
+      return null;
+    }
+
+    return {
+      deliver: mockDeliverEmail,
+    };
+  }),
 }));
 
 vi.mock('../src/mlClient.js', () => ({
@@ -149,11 +162,22 @@ function setupHappyPathClient() {
   return client;
 }
 
+function resetProcessorMocks(): void {
+  vi.clearAllMocks();
+
+  mockDeliverEmail.mockResolvedValue({
+    success: true,
+    statusCode: 200,
+  });
+
+  mockPredictChannel.mockResolvedValue(null);
+}
+
 // ── Tests ──
 
 describe('processNotification', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetProcessorMocks();
   });
 
   it('happy path: delivers email, records attempt, updates status to delivered', async () => {
@@ -177,12 +201,13 @@ describe('processNotification', () => {
       [NOTIF_ID],
     );
 
-    // Verify deliverEmail was called with notification content
+    // Verify deliverEmail was called with notification content + context
     expect(mockDeliverEmail).toHaveBeenCalledWith(
       'user@example.com',
       'Test',
       'Hello world',
       null,
+      { notificationId: NOTIF_ID, tenantId: TENANT_ID },
     );
 
     // Verify BEGIN (call 6)
@@ -282,7 +307,7 @@ describe('processNotification', () => {
     expect(client.release).toHaveBeenCalled();
   });
 
-  it('all channels exhausted: non-email channels skipped, status set to failed', async () => {
+  it('all channels exhausted: unsupported channels skipped, status set to failed', async () => {
     const { client, pushResult } = makeMockClient();
 
     // 0: set_config
@@ -296,11 +321,11 @@ describe('processNotification', () => {
       body: 'Hello',
       body_html: null,
     }]);
-    // 3: SELECT channels (only websocket — not implemented)
+    // 3: SELECT channels (only unsupported webhook — skipped)
     pushResult([{
       id: CHANNEL_ID,
-      type: 'websocket',
-      label: 'In-App WebSocket',
+      type: 'webhook',
+      label: 'Generic Webhook',
       config: {},
       circuit_state: 'closed',
       priority: 5,
@@ -318,7 +343,7 @@ describe('processNotification', () => {
 
     await expect(processNotification(makeJob())).rejects.toThrow('All channels exhausted');
 
-    // deliverEmail should NOT have been called (websocket is not implemented)
+    // delivery should NOT have been called for unsupported webhook
     expect(mockDeliverEmail).not.toHaveBeenCalled();
 
     // Notification should be marked failed
@@ -609,7 +634,7 @@ function makeMockPublisher(): DashboardEventPublisher & { emit: ReturnType<typeo
 
 describe('processNotification — dashboard events', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetProcessorMocks();
   });
 
   it('emits delivery.completed and notification.status_changed=delivered on success', async () => {

@@ -1,43 +1,33 @@
+import type { DeliveryChannel, DeliveryResult } from './types.js';
 import { logger } from '../logger.js';
 
-export interface SmsMockResult {
-  success: boolean;
-  statusCode?: number;
-  error?: string;
-}
+export class SmsMockChannel implements DeliveryChannel {
+  async deliver(
+    recipient: string,
+    _subject: string | null,
+    body: string,
+    _bodyHtml: string | null,
+  ): Promise<DeliveryResult> {
+    try {
+      logger.info(
+        {
+          recipient: recipient.substring(0, 3) + '***',
+          bodyLength: body.length,
+          channel: 'sms_webhook',
+        },
+        'Mock SMS delivered',
+      );
 
-export async function deliverSmsMock(
-  recipient: string,
-  body: string,
-): Promise<SmsMockResult> {
-  try {
-    logger.info(
-      {
-        recipient: recipient.substring(0, 3) + '***',
-        bodyLength: body.length,
-        channel: 'sms_webhook',
-      },
-      'Mock SMS delivered',
-    );
+      return { success: true, statusCode: 200 };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown SMS mock error';
 
-    return {
-      success: true,
-      statusCode: 200,
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown SMS mock error';
+      logger.error(
+        { err, recipient: recipient.substring(0, 3) + '***' },
+        'Mock SMS delivery failed',
+      );
 
-    logger.error(
-      {
-        err,
-        recipient: recipient.substring(0, 3) + '***',
-      },
-      'Mock SMS delivery failed',
-    );
-
-    return {
-      success: false,
-      error: message,
-    };
+      return { success: false, error: message };
+    }
   }
 }
