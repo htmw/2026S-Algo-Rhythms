@@ -1,6 +1,7 @@
 export interface DeliveryResult {
   success: boolean;
   statusCode?: number;
+  durationMs?: number;
   error?: string;
 }
 

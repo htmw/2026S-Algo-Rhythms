@@ -50,10 +50,7 @@ export class WebSocketChannel implements DeliveryChannel {
         }),
       );
 
-      return {
-        success: true,
-        statusCode: 200,
-      };
+      return { success: true, statusCode: 200 };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown WebSocket delivery error';
 
@@ -62,10 +59,7 @@ export class WebSocketChannel implements DeliveryChannel {
         'WebSocket delivery failed',
       );
 
-      return {
-        success: false,
-        error: message,
-      };
+      return { success: false, error: message };
     }
   }
 }
