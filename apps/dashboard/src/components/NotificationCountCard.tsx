@@ -18,80 +18,31 @@ export default function NotificationCountCard({
   isError = false,
 }: NotificationCountCardProps) {
   return (
-    <div
-      style={{
-        backgroundColor: "white",
-        borderRadius: "12px",
-        border: "0.5px solid #E5E7EB",
-        padding: "20px",
-        display: "flex",
-        alignItems: "center",
-        gap: "16px",
-        flex: 1,
-      }}
-    >
+    <div className="flex flex-1 items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
       <div
-        style={{
-          width: "48px",
-          height: "48px",
-          borderRadius: "10px",
-          backgroundColor: bgColor,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px]"
+        style={{ backgroundColor: bgColor }}
       >
         {icon}
       </div>
 
-      <div style={{ flex: 1 }}>
-        <div
-          style={{
-            fontSize: "12px",
-            color: "#6B7280",
-            marginBottom: "4px",
-            fontWeight: "500",
-          }}
-        >
+      <div className="flex-1">
+        <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
           {label}
         </div>
 
         {isLoading ? (
-          <div
-            style={{
-              width: "48px",
-              height: "28px",
-              backgroundColor: "#F3F4F6",
-              borderRadius: "6px",
-              animation: "pulse 1.5s ease-in-out infinite",
-            }}
-          />
+          <div className="h-7 w-12 rounded-md bg-gray-100 dark:bg-gray-700" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
         ) : isError ? (
-          <div style={{ fontSize: "13px", color: "#DC2626" }}>
-            Error
-          </div>
+          <div className="text-[13px] text-red-600">Error</div>
         ) : (
-          <div
-            style={{
-              fontSize: "26px",
-              fontWeight: "700",
-              color: "#111827",
-              lineHeight: 1,
-            }}
-          >
+          <div className="text-[26px] font-bold leading-none text-gray-900 dark:text-gray-100">
             {value}
           </div>
         )}
       </div>
 
-      <div
-        style={{
-          fontSize: "11px",
-          color: "#9CA3AF",
-          alignSelf: "flex-end",
-        }}
-      >
+      <div className="self-end text-[11px] text-gray-400 dark:text-gray-500">
         live
       </div>
     </div>

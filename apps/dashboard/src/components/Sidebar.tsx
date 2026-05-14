@@ -7,8 +7,11 @@ import {
   Settings,
   Brain,
   Wand2,
+  Sun,
+  Moon,
 } from "lucide-react";
 import TenantSwitcher from "./TenantSwitcher";
+import { useThemeContext } from "../contexts/ThemeContext.js";
 
 const navItems: { label: string; icon: ReactNode; path: string }[] = [
   { label: "Dashboard",     icon: <LayoutDashboard className="h-5 w-5" />, path: "/dashboard"     },
@@ -20,11 +23,13 @@ const navItems: { label: string; icon: ReactNode; path: string }[] = [
 ];
 
 export default function Sidebar() {
+  const { isDark, toggleTheme } = useThemeContext();
+
   return (
     <aside style={{
       width: "256px",
       minHeight: "100vh",
-      backgroundColor: "#111827",
+      backgroundColor: isDark ? "#030712" : "#111827",
       color: "white",
       display: "flex",
       flexDirection: "column",
@@ -72,7 +77,28 @@ export default function Sidebar() {
       <div style={{
         padding: "16px 24px",
         borderTop: "1px solid #374151",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
       }}>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          style={{
+            background: "transparent",
+            border: "1px solid #374151",
+            borderRadius: "6px",
+            padding: "6px",
+            cursor: "pointer",
+            color: "#9CA3AF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
       </div>
     </aside>
   );

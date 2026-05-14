@@ -42,52 +42,52 @@ export function EngagementResponseCard({ engagement, recipientId }: EngagementRe
   const persona = extractPersonaLabel(recipientId);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 text-sm">
       <div className="flex flex-wrap items-center gap-3">
         {engagement.engaged ? (
-          <Badge className="bg-green-100 text-green-700">
+          <Badge className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
             <CheckCircle className="h-3 w-3" />
             Engaged
           </Badge>
         ) : (
-          <Badge className="bg-red-100 text-red-700">
+          <Badge className="bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400">
             <XCircle className="h-3 w-3" />
             Not Engaged
           </Badge>
         )}
 
-        <Badge className="bg-gray-100 text-gray-700">
+        <Badge className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
           <Radio className="h-3 w-3" />
           {engagement.channel}
         </Badge>
 
         {engagement.engagementType && (
-          <Badge className="bg-purple-100 text-purple-700">
+          <Badge className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400">
             {engagement.engagementType}
           </Badge>
         )}
       </div>
 
-      <div className="mt-3 text-xs text-gray-600">
+      <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
         {persona.isPersona ? (
-          <span>Persona: <span className="font-medium text-gray-900">{persona.label}</span></span>
+          <span>Persona: <span className="font-medium text-gray-900 dark:text-gray-100">{persona.label}</span></span>
         ) : (
-          <span>Recipient: <span className="font-medium text-gray-900">{persona.label}</span></span>
+          <span>Recipient: <span className="font-medium text-gray-900 dark:text-gray-100">{persona.label}</span></span>
         )}
       </div>
 
       {engagement.reason ? (
         <div className="mt-3">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
             <Brain className="h-3 w-3" />
             Engagement Reasoning
           </div>
-          <div className="rounded bg-gray-50 p-2.5 text-xs text-gray-600 leading-relaxed">
+          <div className="rounded bg-gray-50 dark:bg-gray-700/50 p-2.5 text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
             {engagement.reason}
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-xs text-gray-400">Engagement reasoning not available</p>
+        <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">Engagement reasoning not available</p>
       )}
     </div>
   );
