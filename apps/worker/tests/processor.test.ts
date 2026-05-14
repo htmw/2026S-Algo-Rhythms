@@ -195,12 +195,13 @@ describe('processNotification', () => {
       [NOTIF_ID],
     );
 
-    // Verify deliverEmail was called with notification content
+    // Verify deliverEmail was called with notification content + context
     expect(mockDeliverEmail).toHaveBeenCalledWith(
       'user@example.com',
       'Test',
       'Hello world',
       null,
+      { notificationId: NOTIF_ID, tenantId: TENANT_ID },
     );
 
     // Verify BEGIN (call 6)

@@ -15,6 +15,7 @@ import { routingRouter } from './routes/routing.js';
 import { registerDashboardNamespace } from './socket/dashboardNamespace.js';
 import { startDashboardBridge } from './socket/dashboardBridge.js';
 import { initApiEmitter } from './socket/apiEmitter.js';
+import { registerNotificationNamespace, startNotificationBridge } from './socket/notificationNamespace.js';
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -49,6 +50,7 @@ const io = new SocketIOServer(httpServer, {
 });
 
 const dashboardNsp = registerDashboardNamespace(io);
+const notificationNsp = registerNotificationNamespace(io);
 initApiEmitter(process.env.REDIS_URL || 'redis://localhost:6379');
 
 // Dedicated Redis subscriber connection — must NOT be shared with BullMQ
@@ -60,6 +62,10 @@ const dashboardSubscriber = new Redis(
 
 void startDashboardBridge(dashboardNsp, dashboardSubscriber).catch((err: unknown) => {
   logger.error({ err }, 'Failed to start dashboard bridge');
+});
+
+void startNotificationBridge(notificationNsp).catch((err: unknown) => {
+  logger.error({ err }, 'Failed to start notification bridge');
 });
 
 httpServer.listen(port, () => {

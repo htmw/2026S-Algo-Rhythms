@@ -1,16 +1,8 @@
 import { Redis } from 'ioredis';
-import type { DeliveryChannel, DeliveryResult } from './types.js';
+import type { DeliveryChannel, DeliveryContext, DeliveryResult } from './types.js';
 import { logger } from '../logger.js';
 
-const DASHBOARD_CHANNEL = 'dashboard:events';
-
-interface WebSocketDeliveryPayload {
-  recipient: string;
-  subject: string | null;
-  body: string;
-  bodyHtml: string | null;
-  timestamp: string;
-}
+const NOTIFICATIONS_CHANNEL = 'notifications:delivery';
 
 export class WebSocketChannel implements DeliveryChannel {
   private redis: Redis;
@@ -31,22 +23,22 @@ export class WebSocketChannel implements DeliveryChannel {
     subject: string | null,
     body: string,
     bodyHtml: string | null,
+    context?: DeliveryContext,
   ): Promise<DeliveryResult> {
     try {
-      const payload: WebSocketDeliveryPayload = {
-        recipient,
-        subject,
-        body,
-        bodyHtml,
-        timestamp: new Date().toISOString(),
-      };
-
       await this.redis.publish(
-        DASHBOARD_CHANNEL,
+        NOTIFICATIONS_CHANNEL,
         JSON.stringify({
-          event: 'websocket.delivery',
+          notificationId: context?.notificationId ?? null,
+          tenantId: context?.tenantId ?? null,
+          recipientId: recipient,
           room: `user:${recipient}`,
-          payload,
+          payload: {
+            subject,
+            body,
+            bodyHtml,
+            timestamp: new Date().toISOString(),
+          },
         }),
       );
 

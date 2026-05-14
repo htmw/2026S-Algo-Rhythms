@@ -251,6 +251,7 @@ export async function processNotification(
         notification.subject,
         notification.body,
         notification.body_html,
+        { notificationId, tenantId },
       );
 
       success = result.success;
