@@ -9,12 +9,10 @@ const {
   mockPoolConnect,
   mockDeliverEmail,
   mockPredictChannel,
-  mockGetDeliveryChannel,
 } = vi.hoisted(() => ({
   mockPoolConnect: vi.fn(),
   mockDeliverEmail: vi.fn(),
   mockPredictChannel: vi.fn(),
-  mockGetDeliveryChannel: vi.fn(),
 }));
 
 vi.mock('../src/circuitBreaker.js', () => ({
@@ -167,21 +165,11 @@ function resetProcessorMocks(): void {
   });
 
   mockPredictChannel.mockResolvedValue(null);
-
-  mockGetDeliveryChannel.mockImplementation((channelType: string) => {
-    if (channelType !== 'email' && channelType !== 'websocket') {
-      return null;
-    }
-
-    return {
-      deliver: mockDeliverEmail,
-    };
-  });
 }
 
 // ── Tests ──
 
-describe.skip('processNotification', () => {
+describe('processNotification', () => {
   beforeEach(() => {
     resetProcessorMocks();
   });
@@ -246,19 +234,7 @@ describe.skip('processNotification', () => {
   });
 
   it('failure path: email fails, throws error to trigger BullMQ retry', async () => {
-    const { client, emailResult } = makeMockClient();
-
-    const { getDeliveryChannel } = await import('../src/channels/registry.js');
-  
-    vi.mocked(getDeliveryChannel).mockReturnValue({
-      deliver: vi.fn(async () => ({
-        success: false,
-        error: 'SMTP timeout',
-      })),
-    });
-  
-    mockPoolConnect.mockResolvedValue(client as never);
-    const { client: pushClient, pushResult } = makeMockClient();
+    const { client, pushResult } = makeMockClient();
 
     // 0: set_config
     pushResult([]);
@@ -522,7 +498,7 @@ function makeMockPublisher(): DashboardEventPublisher & { emit: ReturnType<typeo
   };
 }
 
-describe.skip('processNotification — dashboard events', () => {
+describe('processNotification — dashboard events', () => {
   beforeEach(() => {
     resetProcessorMocks();
   });
