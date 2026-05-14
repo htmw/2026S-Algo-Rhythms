@@ -20,10 +20,7 @@ import {
 } from './routingDecision.js';
 import type { DashboardEventPublisher } from './dashboardEvents.js';
 import { maskEmail } from './dashboardEvents.js';
-import {
-  recordCircuitBreakerOutcome,
-  shouldAllowChannelProbe,
-} from './circuitBreaker.js';
+
 
 interface ChannelRow {
   id: string;
@@ -123,13 +120,7 @@ export async function processNotification(
       );
     }
 
-    const eligibleChannels: ChannelRow[] = [];
-    for (const channel of channelsResult.rows) {
-      const allowed = await shouldAllowChannelProbe(client, channel.id);
-      if (allowed) {
-        eligibleChannels.push(channel);
-      }
-    }
+    const eligibleChannels = channelsResult.rows;
 
     if (eligibleChannels.length === 0) {
       log.warn('No available channels for tenant');
@@ -354,7 +345,6 @@ export async function processNotification(
         throw txErr;
       }
 
-      await recordCircuitBreakerOutcome(client, channel.id, success);
 
       emitDashboard(DASHBOARD_EVENTS.DELIVERY_COMPLETED, {
         notificationId,
