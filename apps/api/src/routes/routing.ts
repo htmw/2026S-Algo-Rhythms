@@ -49,7 +49,7 @@ routingRouter.get('/model/history', async (req: Request, res: Response): Promise
       `SELECT version, auc_roc, accuracy, precision_score, recall_score,
               f1_score, training_samples, feature_importance, created_at
        FROM model_metadata
-       WHERE tenant_id = $1
+       WHERE (tenant_id = $1 OR tenant_id IS NULL)
        ORDER BY created_at DESC
        LIMIT 2`,
       [tenantId],
