@@ -7,6 +7,7 @@ import Settings from "./pages/Settings";
 import { SocketDebugPanel } from "./components/SocketDebugPanel";
 import RoutingIntelligence from "./pages/RoutingIntelligence";
 import { SimulationControlPanel } from "./pages/SimulationControlPanel";
+import { DataTransparency } from "./pages/DataTransparency";
 import { ThemeProvider } from "./contexts/ThemeContext.js";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/routing" element={<RoutingIntelligence />} />
             <Route path="/simulation" element={<SimulationControlPanel />} />
+            <Route path="/transparency" element={<DataTransparency />} />
           </Routes>
           <SocketDebugPanel />
         </div>

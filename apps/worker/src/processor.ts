@@ -21,6 +21,7 @@ import {
   type RoutingDecisionRecord,
 } from './routingDecision.js';
 import { classifyContent } from './services/contentClassification.js';
+import pLimit from 'p-limit';
 import { simulateEngagement } from './simulation/engagementSimulator.js';
 import type { DashboardEventPublisher } from './dashboardEvents.js';
 import { maskEmail } from './dashboardEvents.js';
@@ -28,6 +29,8 @@ import {
   recordCircuitBreakerOutcome,
   shouldAllowChannelProbe,
 } from './circuitBreaker.js';
+
+const simulationLimit = pLimit(1);
 
 interface ChannelRow {
   id: string;
@@ -421,7 +424,7 @@ export async function processNotification(
 
         try {
           const now = new Date();
-          const decision = await simulateEngagement({
+          const decision = await simulationLimit(() => simulateEngagement({
             recipientId: notification.recipient,
             channel: channel.type,
             subject: notification.subject ?? '',
@@ -430,7 +433,7 @@ export async function processNotification(
             hourOfDay: now.getHours(),
             dayOfWeek: now.getDay() === 0 ? 6 : now.getDay() - 1,
             isWeekend: now.getDay() === 0 || now.getDay() === 6,
-          });
+          }));
 
           if (decision) {
             log.info(
