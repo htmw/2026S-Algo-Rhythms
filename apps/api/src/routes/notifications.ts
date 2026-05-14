@@ -284,7 +284,7 @@ notificationRouter.get('/:id', async (req: Request, res: Response): Promise<void
     const attemptsResult = await dbClient.query(
       `SELECT channel_type, attempt_number, status, status_code,
               error_message, engaged, engagement_type, engagement_reason,
-              engaged_at, started_at, completed_at, duration_ms
+              engaged_at, started_at, completed_at, duration_ms, feature_vector
        FROM delivery_attempts
        WHERE notification_id = $1 AND tenant_id = $2
        ORDER BY attempt_number ASC`,
