@@ -161,14 +161,7 @@ playwright-report/
 .cache/
 apps/dashboard/.vite/
 
-# Local demo and test scripts (dev-start.sh and dev-stop.sh are tracked)
-scripts/demo*.sh
-scripts/test-*.sh
-scripts/local-*.sh
-scripts/collect-*.sh
-scripts/verify-*.sh
-scripts/sprint*.sh
-scripts/team-setup.sh
+scripts/
 
 # ML model artifacts
 apps/ml-service/models/
