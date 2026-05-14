@@ -1,6 +1,6 @@
 # NotifyEngine
 
-Multi-tenant notification delivery service with ML-powered adaptive channel routing. NotifyEngine accepts notification requests via a REST API, routes them across email, SMS, and webhook channels, and uses an XGBoost engagement prediction model to learn which channel works best for each recipient. An AI content classifier categorizes each notification (security, marketing, transactional, social, operational) to improve routing decisions, and a circuit breaker protects downstream channels from cascading failures.
+Multi-tenant notification delivery service with ML-powered adaptive channel routing. NotifyEngine accepts notification requests via a REST API, routes them across email, SMS, WebSocket, and webhook channels, and uses an XGBoost engagement prediction model to learn which channel works best for each recipient. An AI content classifier categorizes each notification (security, marketing, transactional, social, operational) to improve routing decisions, and a circuit breaker protects downstream channels from cascading failures.
 
 ## Prerequisites
 
