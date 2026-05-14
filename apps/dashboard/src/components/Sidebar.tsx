@@ -7,6 +7,7 @@ import {
   Settings,
   Brain,
   Wand2,
+  Eye,
   Sun,
   Moon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const navItems: { label: string; icon: ReactNode; path: string }[] = [
   { label: "Settings",      icon: <Settings className="h-5 w-5" />,        path: "/settings"      },
   { label: "Routing",       icon: <Brain className="h-5 w-5" />,           path: "/routing"       },
   { label: "Simulation",   icon: <Wand2 className="h-5 w-5" />,          path: "/simulation"    },
+  { label: "Transparency", icon: <Eye className="h-5 w-5" />,            path: "/transparency"  },
 ];
 
 export default function Sidebar() {
