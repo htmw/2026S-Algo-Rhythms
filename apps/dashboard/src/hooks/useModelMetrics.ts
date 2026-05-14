@@ -13,7 +13,7 @@ interface ModelInfo {
 export function useModelMetrics() {
   return useQuery<ModelInfo>({
     queryKey: ['modelMetrics'],
-    queryFn: () => apiFetch<ModelInfo>('/v1/routing/model'),
+    queryFn: () => apiFetch<ModelInfo>('/v1/model/info'),
     refetchInterval: 60_000,
     retry: 1,
   });
