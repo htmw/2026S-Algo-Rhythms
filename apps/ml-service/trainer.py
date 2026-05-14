@@ -270,12 +270,29 @@ class ModelTrainer:
             new_model.version = f"v{int(datetime.utcnow().timestamp())}"
             metrics = new_model.train(df)
 
-            current_auc = (current_model.metrics.get("auc_roc", 0.0) if current_model else 0.0)
-            if metrics["auc_roc"] <= current_auc:
+            new_auc = metrics["auc_roc"]
+            new_samples = metrics.get("training_samples", 0)
+
+            if current_model is None:
+                should_promote = new_auc >= self.settings.min_auc_threshold
+            else:
+                current_auc = current_model.metrics.get("auc_roc", 0.0)
+                current_samples = current_model.metrics.get("training_samples", 0)
+
+                if new_auc > current_auc:
+                    should_promote = True
+                elif current_samples > 0 and new_samples >= current_samples * 2:
+                    should_promote = new_auc >= self.settings.min_auc_threshold
+                else:
+                    should_promote = False
+
+            if not should_promote:
                 logger.info(
-                    "New model AUC %.4f did not beat current %.4f — discarding",
-                    metrics["auc_roc"],
-                    current_auc,
+                    "New model not promoted (AUC %.4f, %d samples vs current AUC %.4f, %d samples)",
+                    new_auc,
+                    new_samples,
+                    current_model.metrics.get("auc_roc", 0.0) if current_model else 0.0,
+                    current_model.metrics.get("training_samples", 0) if current_model else 0,
                 )
                 return None, None
 
