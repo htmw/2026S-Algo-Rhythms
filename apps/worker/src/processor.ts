@@ -252,7 +252,9 @@ export async function processNotification(
         notification.body,
         notification.body_html,
       );
-
+      success = result.success;
+      statusCode = result.statusCode?? null;
+      errorMessage = result.error?? null;
       const completedAt = new Date();
       const durationMs = completedAt.getTime() - startedAt.getTime();
       const attemptStatus = success ? 'success' : 'failure';
