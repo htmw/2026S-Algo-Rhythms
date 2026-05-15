@@ -855,6 +855,10 @@ press_enter
 # ============================================================================
 banner "ACT 6: ML LEARNING LOOP"
 
+show "Opening simulation page for retrain button"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/simulation"
+sleep 3
+
 step "6.1" "Current model state (BEFORE retrain)"
 focus_terminal
 show "model_metadata table - the ML model's report card"
@@ -888,28 +892,17 @@ run_sql "SELECT feature_vector
 
 press_enter
 
-step "6.2" "Trigger model retrain"
-focus_terminal
+step "6.2" "Trigger model retrain from dashboard"
 
-RETRAIN_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-  -X POST "http://localhost:$API_PORT/v1/simulation/retrain" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DEMO_KEY" 2>/dev/null || echo "000")
+instruction_box "On the Simulation Control Panel page,
+click the \"Retrain Model\" button.
 
-if [[ "$RETRAIN_CHECK" == "404" || "$RETRAIN_CHECK" == "000" ]]; then
-  info "Retrain proxy endpoint not available. Calling ML service directly."
-  RETRAIN_RESPONSE=$(curl -s -X POST "http://localhost:$ML_SERVICE_PORT/train" \
-    -H "Content-Type: application/json" \
-    -d "{\"tenant_id\": \"$DEMO_TENANT_ID\"}" 2>/dev/null || echo '{"error": "ML service not responding"}')
-else
-  RETRAIN_RESPONSE=$(curl -s -X POST "http://localhost:$API_PORT/v1/simulation/retrain" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $DEMO_KEY")
-fi
-
-echo "$RETRAIN_RESPONSE" | pretty_json
+Watch for the retrain result to appear."
 
 press_enter
+
+sleep 10
+focus_terminal
 
 step "6.3" "Model metadata AFTER retrain"
 
