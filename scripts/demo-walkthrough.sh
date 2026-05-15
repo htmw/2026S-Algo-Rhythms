@@ -564,7 +564,7 @@ show "Opening dashboard home page"
 info "The dashboard is configured with this demo tenant's API key."
 info "It shows real-time data via Socket.IO and TanStack Query."
 
-$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/dashboard"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/dashboard?t=$(date +%s)"
 sleep 3
 
 info "Dashboard showing current state. Press ENTER to begin notification burst."
@@ -684,7 +684,7 @@ press_enter
 step "5c.1" "Simulation Control Panel"
 show "Opening simulation page"
 
-$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/simulation"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/simulation?t=$(date +%s)"
 sleep 3
 
 info "Simulation Control Panel loaded."
@@ -781,7 +781,7 @@ press_enter
 step "5d" "Data Transparency Page"
 show "Opening transparency page"
 
-$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/transparency"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/transparency?t=$(date +%s)"
 sleep 3
 
 info "Data Transparency page loaded. Showing audit data and model metrics."
@@ -841,7 +841,7 @@ press_enter
 step "5e" "Routing Intelligence"
 show "Opening routing page"
 
-$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/routing"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/routing?t=$(date +%s)"
 sleep 3
 
 info "Routing Intelligence page loaded."
@@ -856,7 +856,7 @@ press_enter
 banner "ACT 6: ML LEARNING LOOP"
 
 show "Opening simulation page for retrain button"
-$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/simulation"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/simulation?t=$(date +%s)"
 sleep 3
 
 step "6.1" "Current model state (BEFORE retrain)"
@@ -925,7 +925,7 @@ press_enter
 step "6.4" "Re-open Data Transparency page (updated model metrics)"
 show "Opening transparency page after retrain"
 
-$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/transparency"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/transparency?t=$(date +%s)"
 sleep 3
 
 info "Transparency page refreshed — audience can see updated model version/metrics."
