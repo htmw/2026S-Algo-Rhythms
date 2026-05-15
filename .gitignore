@@ -161,7 +161,7 @@ playwright-report/
 .cache/
 apps/dashboard/.vite/
 
-scripts/
+.demo/
 
 # ML model artifacts
 apps/ml-service/models/
