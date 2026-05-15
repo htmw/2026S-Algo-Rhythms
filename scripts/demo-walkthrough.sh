@@ -17,6 +17,17 @@ read -r
 
 set -euo pipefail
 
+# Cross-platform browser open
+if command -v open &>/dev/null; then
+  BROWSER_OPEN="open"
+elif command -v start &>/dev/null; then
+  BROWSER_OPEN="start"
+elif command -v xdg-open &>/dev/null; then
+  BROWSER_OPEN="xdg-open"
+else
+  BROWSER_OPEN="echo 'Open in browser:'"
+fi
+
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
@@ -382,7 +393,7 @@ banner "ACT 2: LIVE EMAIL DELIVERY"
 step "2.1" "Open Mailpit to watch email arrive live"
 show "Opening Mailpit inbox in browser"
 
-open "http://localhost:$MAILPIT_UI_PORT"
+$BROWSER_OPEN "http://localhost:$MAILPIT_UI_PORT"
 sleep 3
 
 info "Mailpit is open. The inbox is empty."
@@ -553,7 +564,7 @@ show "Opening dashboard home page"
 info "The dashboard is configured with this demo tenant's API key."
 info "It shows real-time data via Socket.IO and TanStack Query."
 
-open "http://localhost:$DASHBOARD_PORT/dashboard"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/dashboard"
 sleep 3
 
 info "Dashboard showing current state. Press ENTER to begin notification burst."
@@ -671,7 +682,7 @@ press_enter
 step "5c.1" "Simulation Control Panel"
 show "Opening simulation page"
 
-open "http://localhost:$DASHBOARD_PORT/simulation"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/simulation"
 sleep 3
 
 info "Simulation Control Panel loaded."
@@ -768,7 +779,7 @@ press_enter
 step "5d" "Data Transparency Page"
 show "Opening transparency page"
 
-open "http://localhost:$DASHBOARD_PORT/transparency"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/transparency"
 sleep 3
 
 info "Data Transparency page loaded. Showing audit data and model metrics."
@@ -828,7 +839,7 @@ press_enter
 step "5e" "Routing Intelligence"
 show "Opening routing page"
 
-open "http://localhost:$DASHBOARD_PORT/routing"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/routing"
 sleep 3
 
 info "Routing Intelligence page loaded."
@@ -919,7 +930,7 @@ press_enter
 step "6.4" "Re-open Data Transparency page (updated model metrics)"
 show "Opening transparency page after retrain"
 
-open "http://localhost:$DASHBOARD_PORT/transparency"
+$BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/transparency"
 sleep 3
 
 info "Transparency page refreshed — audience can see updated model version/metrics."
