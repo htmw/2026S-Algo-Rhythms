@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# ============================================================================
-# NotifyEngine - Sprint 3 Demo Walkthrough
-# ============================================================================
-# Run from repo root: bash scripts/demo-walkthrough.sh
-#
-# This script IS the entire demo presentation. The presenter hits ENTER to
-# advance and explains what is happening. The audience sees everything live —
-# emails arriving in Mailpit, notifications populating the dashboard, stats
-# updating in real-time.
-#
-# Press ENTER to advance between steps. Ctrl+C to abort (cleanup runs).
-# ============================================================================
+cat << 'EOF'
+
+               __  .__  _____                            .__               
+  ____   _____/  |_|__|/ ____\__.__. ____   ____    ____ |__| ____   ____  
+ /    \ /  _ \   __\  \   __<   |  |/ __ \ /    \  / ___\|  |/    \_/ __ \ 
+|   |  (  <_> )  | |  ||  |  \___  \  ___/|   |  \/ /_/  >  |   |  \  ___/ 
+|___|  /\____/|__| |__||__|  / ____|\___  >___|  /\___  /|__|___|  /\___  >
+     \/                      \/         \/     \//_____/         \/     \/ 
+
+                    Sprint 3 Demo Walkthrough
+
+EOF
+echo ""
+echo -e "\033[0;35m\033[1m  >>> Press ENTER to begin <<<\033[0m"
+read -r
 
 set -euo pipefail
 
@@ -679,6 +682,8 @@ press_enter
 step "5c.2" "Compose Form Demo"
 focus_terminal
 
+COMPOSE_BEFORE_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
 instruction_box "PASTE INTO COMPOSE FORM:
 
 Recipient: demo@example.com
@@ -709,6 +714,7 @@ run_sql "SELECT
            routing_decision->>'reason' AS reason
          FROM notifications
          WHERE tenant_id = '$DEMO_TENANT_ID'
+           AND created_at > '$COMPOSE_BEFORE_TS'
          ORDER BY created_at DESC
          LIMIT 1;"
 
@@ -717,6 +723,8 @@ press_enter
 # --- 5c.3: Scenario Launcher Demo ---
 step "5c.3" "Scenario Launcher Demo"
 focus_terminal
+
+SCENARIO_BEFORE_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 instruction_box "On the Simulation Control Panel page,
 click the \"Security Alert Blast\" scenario card.
@@ -727,13 +735,21 @@ info "Click the scenario card, then press ENTER."
 
 press_enter
 
-info "Waiting 15 seconds for notifications to process..."
-sleep 15
+info "Waiting 30 seconds for notifications to classify (each calls Claude Sonnet)..."
+sleep 30
 
-press_enter
+CLASSIFIED_COUNT=$(run_sql_quiet "SELECT COUNT(*) FROM notifications WHERE tenant_id = '$DEMO_TENANT_ID' AND created_at > '$SCENARIO_BEFORE_TS' AND content_classification IS NOT NULL;")
+CLASSIFIED_COUNT=$(echo "$CLASSIFIED_COUNT" | tr -d ' ')
+TOTAL_COUNT=$(run_sql_quiet "SELECT COUNT(*) FROM notifications WHERE tenant_id = '$DEMO_TENANT_ID' AND created_at > '$SCENARIO_BEFORE_TS';")
+TOTAL_COUNT=$(echo "$TOTAL_COUNT" | tr -d ' ')
+
+if [ "$CLASSIFIED_COUNT" -lt "$TOTAL_COUNT" ] 2>/dev/null; then
+  info "Classified $CLASSIFIED_COUNT/$TOTAL_COUNT so far — waiting 15 more seconds..."
+  sleep 15
+fi
 
 focus_terminal
-show "Content classification and routing for simulation notifications"
+show "Content classification and routing for scenario notifications"
 
 run_sql "SELECT
            LEFT(subject, 45) AS subject,
@@ -743,8 +759,8 @@ run_sql "SELECT
            routing_decision->>'exploration' AS explored
          FROM notifications
          WHERE tenant_id = '$DEMO_TENANT_ID'
-         ORDER BY created_at DESC
-         LIMIT 10;"
+           AND created_at > '$SCENARIO_BEFORE_TS'
+         ORDER BY created_at DESC;"
 
 press_enter
 
