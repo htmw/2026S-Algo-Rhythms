@@ -159,6 +159,29 @@ export function ModelMetricsPanel() {
             No previous model to compare. A comparison will appear after the first retrain.
           </p>
         )}
+        <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+          Compares the most recent retrain against the previously active model to show whether performance improved.
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6">
+        <p className="mb-2 text-xs font-medium text-slate-400 dark:text-slate-500">Metric Legend</p>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">Accuracy</dt>
+          <dd className="text-slate-400 dark:text-slate-500">Percentage of predictions that were correct</dd>
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">AUC-ROC</dt>
+          <dd className="text-slate-400 dark:text-slate-500">How well the model separates &ldquo;will engage&rdquo; from &ldquo;won&rsquo;t&rdquo; across all thresholds (promotion gate)</dd>
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">Precision</dt>
+          <dd className="text-slate-400 dark:text-slate-500">When predicting engagement, how often was it right</dd>
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">Recall</dt>
+          <dd className="text-slate-400 dark:text-slate-500">Of all actual engagements, how many did the model catch</dd>
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">F1</dt>
+          <dd className="text-slate-400 dark:text-slate-500">Harmonic mean of precision and recall</dd>
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">Training Samples</dt>
+          <dd className="text-slate-400 dark:text-slate-500">Data points the model learned from</dd>
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">Test Samples</dt>
+          <dd className="text-slate-400 dark:text-slate-500">Held-out data points used to evaluate the model</dd>
+        </dl>
       </div>
     </div>
   );
