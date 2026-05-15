@@ -617,10 +617,12 @@ if [[ "$BURST_CHOICE" == "manual" ]]; then
   for i in "${!DEMO_SUBJECTS[@]}"; do
     instruction_box "NOTIFICATION $(($i+1))/6 — PASTE INTO COMPOSE FORM:
 
-Recipient: ${DEMO_RECIPIENTS[$i]}
-Subject:   ${DEMO_SUBJECTS[$i]}
-Body:      ${DEMO_BODIES[$i]}
-Priority:  ${DEMO_PRIORITIES[$i]}
+Persona:       Email Enthusiast
+Recipient:     ${DEMO_RECIPIENTS[$i]}
+Subject:       ${DEMO_SUBJECTS[$i]}
+Body:          ${DEMO_BODIES[$i]}
+Priority:      ${DEMO_PRIORITIES[$i]}
+Routing Mode:  adaptive
 
 Click SEND on the page."
     press_enter
@@ -697,12 +699,12 @@ COMPOSE_BEFORE_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 instruction_box "PASTE INTO COMPOSE FORM:
 
-Recipient: demo@example.com
-Subject:   SECURITY ALERT: Unauthorized access
-Body:      We detected a login from an unrecognized
-           device in Moscow, Russia at 3:47 AM.
-           If this was not you, reset your password
-           immediately.
+Persona:       Email Enthusiast
+Recipient:     demo@example.com
+Subject:       SECURITY ALERT: Unauthorized access
+Body:          We detected a login from an unrecognized device in Moscow, Russia at 3:47 AM. If this was not you, reset your password immediately.
+Priority:      critical
+Routing Mode:  adaptive
 
 Then click SEND on the page."
 
