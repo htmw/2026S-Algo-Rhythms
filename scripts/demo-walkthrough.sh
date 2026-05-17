@@ -138,7 +138,7 @@ instruction_box() {
     (( ${#line} > max_len )) && max_len=${#line}
   done <<< "$input"
   max_len=$((max_len + 2))
-  printf "\n${CYAN}${BOLD}"
+  printf "\n${MAGENTA}${BOLD}"
   printf "  ┌"; printf '─%.0s' $(seq 1 $max_len); printf "┐\n"
   while IFS= read -r line; do
     printf "  │ %-*s│\n" $((max_len - 1)) "$line"
@@ -397,7 +397,7 @@ $BROWSER_OPEN "http://localhost:$MAILPIT_UI_PORT"
 sleep 3
 
 info "Mailpit is open. The inbox is empty."
-info "Press ENTER to send a security alert — watch it arrive live."
+echo -e "${MAGENTA}${BOLD}  Press ENTER to send a security alert — watch it arrive live.${RESET}"
 
 press_enter
 
@@ -428,7 +428,7 @@ DEMO_NOTIF_ID=$(parse_json "$NOTIF_JSON" "id")
 success "Captured notification ID: $DEMO_NOTIF_ID"
 
 echo ""
-info "Check Mailpit — the email should appear within seconds."
+echo -e "${MAGENTA}${BOLD}  Check Mailpit — the email should appear within seconds.${RESET}"
 echo "  Waiting 5 seconds for worker to process and deliver..."
 sleep 5
 
@@ -567,7 +567,7 @@ info "It shows real-time data via Socket.IO and TanStack Query."
 $BROWSER_OPEN "http://localhost:$DASHBOARD_PORT/dashboard?t=$(date +%s)"
 sleep 3
 
-info "Dashboard showing current state. Press ENTER to begin notification burst."
+echo -e "${MAGENTA}${BOLD}  Dashboard showing current state. Press ENTER to begin notification burst.${RESET}"
 
 press_enter
 
@@ -613,7 +613,7 @@ DEMO_RECIPIENTS=(
 DEMO_PRIORITIES=("high" "standard" "high" "bulk" "critical" "standard")
 
 if [[ "$BURST_CHOICE" == "manual" ]]; then
-  info "Manual mode: paste each notification into the dashboard Compose form."
+  echo -e "${MAGENTA}${BOLD}  Manual mode: paste each notification into the dashboard Compose form.${RESET}"
   for i in "${!DEMO_SUBJECTS[@]}"; do
     instruction_box "NOTIFICATION $(($i+1))/6 — PASTE INTO COMPOSE FORM:
 
@@ -708,7 +708,7 @@ Routing Mode:  adaptive
 
 Then click SEND on the page."
 
-info "Fill the form, click Send, watch the classification card appear."
+echo -e "${MAGENTA}${BOLD}  Fill the form, click Send, watch the classification card appear.${RESET}"
 
 press_enter
 
@@ -744,7 +744,7 @@ click the \"Security Alert Blast\" scenario card.
 
 Watch 5 notifications fire through the system."
 
-info "Click the scenario card, then press ENTER."
+echo -e "${MAGENTA}${BOLD}  Click the scenario card, then press ENTER.${RESET}"
 
 press_enter
 
@@ -892,6 +892,25 @@ run_sql "SELECT feature_vector
 
 press_enter
 
+step "6.1b" "Reset model state for clean retrain"
+show "Deactivating old global models so retrain can promote on fresh data"
+
+run_sql "UPDATE model_metadata SET is_active = false;"
+
+success "Old models deactivated."
+
+echo "  Removing old model files from container..."
+docker compose exec -T ml-service find /app/models -name '*.joblib' -delete 2>/dev/null || true
+
+echo "  Restarting ML service to clear in-memory model..."
+docker compose restart ml-service
+sleep 8
+
+wait_for_port $ML_SERVICE_PORT "ML Service" 15
+
+success "ML service restarted clean. Retrain will now promote if AUC is valid."
+press_enter
+
 step "6.2" "Trigger model retrain from dashboard"
 
 instruction_box "On the Simulation Control Panel page,
@@ -901,6 +920,20 @@ Watch for the retrain result to appear."
 
 press_enter
 
+info "Firing retrain via API as safety net..."
+RETRAIN_RESPONSE=$(curl -s -X POST "http://localhost:$API_PORT/v1/simulation/retrain" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DEMO_KEY" 2>/dev/null || echo '{}')
+
+if [[ "$RETRAIN_RESPONSE" == "{}" || -z "$RETRAIN_RESPONSE" ]]; then
+  RETRAIN_RESPONSE=$(curl -s -X POST "http://localhost:$ML_SERVICE_PORT/train" \
+    -H "Content-Type: application/json" \
+    -d "{\"tenant_id\": \"$DEMO_TENANT_ID\"}" 2>/dev/null || echo '{"error": "retrain failed"}')
+fi
+
+echo "$RETRAIN_RESPONSE" | pretty_json
+
+echo "  Waiting 10 seconds for retrain to complete..."
 sleep 10
 focus_terminal
 
@@ -915,10 +948,25 @@ run_sql "SELECT
            promoted_at,
            training_date
          FROM model_metadata
-         WHERE tenant_id = '$DEMO_TENANT_ID'
-            OR tenant_id IS NULL
          ORDER BY training_date DESC
-         LIMIT 3;"
+         LIMIT 5;"
+
+ACTIVE_COUNT=$(run_sql_quiet "SELECT COUNT(*) FROM model_metadata WHERE is_active = true;")
+if [[ "$ACTIVE_COUNT" -eq 0 ]]; then
+  info "No promoted model yet — waiting 10 more seconds..."
+  sleep 10
+  run_sql "SELECT
+             version,
+             training_samples,
+             auc_roc,
+             accuracy,
+             is_active,
+             promoted_at,
+             training_date
+           FROM model_metadata
+           ORDER BY training_date DESC
+           LIMIT 5;"
+fi
 
 press_enter
 
