@@ -123,7 +123,8 @@ jobs:
         if: steps.check-ml.outputs.exists == 'true'
         run: |
           pip install safety
-          safety check -r apps/ml-service/requirements.txt
+          safety check -r requirements.txt --policy-file .safety-policy.yml
+        working-directory: apps/ml-service
 
       - name: pytest
         if: steps.check-ml.outputs.exists == 'true'
